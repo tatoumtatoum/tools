@@ -394,7 +394,10 @@
     }
     
     async function generatePng() {
-      if (!currentSvg) return null;
+      if (!currentSvg) {
+        console.error('generatePng: No SVG found');
+        return null;
+      }
       
       const scale = parseInt(scaleSelect.value);
       const bgColor = bgSelect.value;
@@ -402,17 +405,22 @@
       const svgClone = currentSvg.cloneNode(true);
       
       let width, height;
-      if (svgClone.viewBox.baseVal.width) {
+      if (svgClone.viewBox && svgClone.viewBox.baseVal && svgClone.viewBox.baseVal.width) {
         width = svgClone.viewBox.baseVal.width;
         height = svgClone.viewBox.baseVal.height;
       } else {
         const bbox = currentSvg.getBoundingClientRect();
-        width = bbox.width;
-        height = bbox.height;
+        width = bbox.width || 400;
+        height = bbox.height || 300;
       }
       
-      svgClone.setAttribute('width', width);
-      svgClone.setAttribute('height', height);
+      // Ensure positive dimensions
+      width = Math.max(width, 100);
+      height = Math.max(height, 100);
+      
+      svgClone.setAttribute('width', String(width));
+      svgClone.setAttribute('height', String(height));
+      svgClone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
       
       if (bgColor !== 'transparent') {
         const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
@@ -423,53 +431,81 @@
       }
       
       const svgData = new XMLSerializer().serializeToString(svgClone);
-      const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
-      const url = URL.createObjectURL(svgBlob);
+      // Encode SVG properly for data URL to avoid issues on mobile
+      const encodedSvg = encodeURIComponent(svgData)
+        .replace(/'/g, '%27')
+        .replace(/"/g, '%22');
+      const svgDataUrl = 'data:image/svg+xml;charset=utf-8,' + encodedSvg;
       
       return new Promise((resolve) => {
         const img = new Image();
+        img.crossOrigin = 'anonymous';
+        
         img.onload = () => {
-          canvas.width = width * scale;
-          canvas.height = height * scale;
-          
-          const ctx = canvas.getContext('2d');
-          ctx.imageSmoothingEnabled = true;
-          ctx.imageSmoothingQuality = 'high';
-          
-          if (bgColor !== 'transparent') {
-            ctx.fillStyle = bgColor;
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+          try {
+            canvas.width = width * scale;
+            canvas.height = height * scale;
+            
+            const ctx = canvas.getContext('2d');
+            if (!ctx) {
+              console.error('generatePng: No canvas context');
+              resolve(null);
+              return;
+            }
+            
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+            
+            if (bgColor !== 'transparent') {
+              ctx.fillStyle = bgColor;
+              ctx.fillRect(0, 0, canvas.width, canvas.height);
+            }
+            
+            ctx.scale(scale, scale);
+            ctx.drawImage(img, 0, 0);
+            
+            const dataUrl = canvas.toDataURL('image/png');
+            console.log('generatePng: Success, dataUrl length:', dataUrl.length);
+            resolve(dataUrl);
+          } catch (err) {
+            console.error('generatePng: Canvas error:', err);
+            resolve(null);
           }
-          
-          ctx.scale(scale, scale);
-          ctx.drawImage(img, 0, 0);
-          
-          URL.revokeObjectURL(url);
-          resolve(canvas.toDataURL('image/png'));
         };
-        img.onerror = () => {
-          URL.revokeObjectURL(url);
+        
+        img.onerror = (e) => {
+          console.error('generatePng: Image load error:', e);
           resolve(null);
         };
-        img.src = url;
+        
+        img.src = svgDataUrl;
       });
     }
     
     async function downloadPng() {
+      console.log('downloadPng: Starting...');
       const dataUrl = await generatePng();
-      if (!dataUrl) return;
+      
+      if (!dataUrl) {
+        console.error('downloadPng: Failed to generate PNG');
+        alert('Failed to generate PNG. Please try again.');
+        return;
+      }
       
       currentDataUrl = dataUrl;
       
       // Re-check mobile status at download time (viewport may have changed)
       const isMobile = checkIsMobile();
+      console.log('downloadPng: isMobile =', isMobile);
       
       if (isMobile) {
         // Mobile: show modal with multiple options
+        console.log('downloadPng: Showing mobile modal');
         modalImage.src = dataUrl;
         mobileModal.classList.add('show');
       } else {
         // Desktop: direct download using blob for better compatibility
+        console.log('downloadPng: Desktop download');
         try {
           const response = await fetch(dataUrl);
           const blob = await response.blob();
@@ -488,6 +524,7 @@
             URL.revokeObjectURL(blobUrl);
           }, 100);
         } catch (err) {
+          console.error('downloadPng: Blob download failed, using data URL fallback');
           // Fallback to data URL
           const link = document.createElement('a');
           link.download = 'mermaid-diagram.png';
