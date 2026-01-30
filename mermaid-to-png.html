@@ -2,33 +2,42 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+  <meta name="theme-color" content="#0066cc">
+  <meta name="description" content="Convert Mermaid diagrams to high-quality PNG images">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Mermaid PNG">
   <title>Mermaid to PNG Converter</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icon-192.png">
   <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
   <style>
     * { box-sizing: border-box; }
+    html { font-size: 16px; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       max-width: 1200px;
       margin: 0 auto;
-      padding: 20px;
+      padding: 16px;
       background: #f5f5f5;
+      min-height: 100vh;
     }
-    h1 { color: #333; margin-bottom: 10px; }
-    .subtitle { color: #666; margin-bottom: 20px; }
-    .container { display: flex; gap: 20px; flex-wrap: wrap; }
+    h1 { color: #333; margin-bottom: 8px; font-size: clamp(1.5rem, 5vw, 2rem); }
+    .subtitle { color: #666; margin-bottom: 16px; font-size: clamp(0.875rem, 3vw, 1rem); }
+    .container { display: flex; gap: 16px; flex-wrap: wrap; }
     .panel {
       flex: 1;
-      min-width: 400px;
+      min-width: min(100%, 350px);
       background: white;
       border-radius: 8px;
-      padding: 20px;
+      padding: 16px;
       box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
     label { font-weight: 600; display: block; margin-bottom: 8px; }
     textarea {
       width: 100%;
-      height: 300px;
+      height: 200px;
       font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
       font-size: 14px;
       padding: 12px;
@@ -39,21 +48,28 @@
     textarea:focus { outline: none; border-color: #0066cc; }
     .controls {
       display: flex;
-      gap: 10px;
-      margin: 15px 0;
+      gap: 8px;
+      margin: 12px 0;
       align-items: center;
       flex-wrap: wrap;
     }
-    .control-group { display: flex; align-items: center; gap: 5px; }
-    select, input[type="number"] {
-      padding: 8px 12px;
+    .control-group { 
+      display: flex; 
+      align-items: center; 
+      gap: 5px;
+      flex-wrap: wrap;
+    }
+    .control-group label { margin: 0; font-size: 14px; }
+    select {
+      padding: 10px 12px;
       border: 1px solid #ddd;
       border-radius: 4px;
       font-size: 14px;
+      background: white;
+      min-height: 44px; /* Touch-friendly */
     }
-    input[type="number"] { width: 80px; }
     button {
-      padding: 10px 20px;
+      padding: 12px 20px;
       background: #0066cc;
       color: white;
       border: none;
@@ -61,19 +77,24 @@
       font-size: 14px;
       cursor: pointer;
       transition: background 0.2s;
+      min-height: 44px; /* Touch-friendly */
+      touch-action: manipulation;
     }
     button:hover { background: #0052a3; }
+    button:active { background: #004080; }
     button:disabled { background: #ccc; cursor: not-allowed; }
-    .download-btn { background: #28a745; }
+    .download-btn { background: #28a745; flex: 1; min-width: 140px; }
     .download-btn:hover { background: #1e7e34; }
+    .render-btn { flex: 1; min-width: 120px; }
     #preview {
       border: 1px solid #ddd;
       border-radius: 4px;
-      padding: 20px;
-      min-height: 300px;
+      padding: 16px;
+      min-height: 250px;
       background: white;
       overflow: auto;
       position: relative;
+      -webkit-overflow-scrolling: touch;
     }
     #preview-inner {
       transform-origin: top left;
@@ -85,23 +106,25 @@
       gap: 8px;
       align-items: center;
       margin-bottom: 10px;
+      flex-wrap: wrap;
     }
     .zoom-btn {
-      width: 32px;
-      height: 32px;
+      width: 44px;
+      height: 44px;
       padding: 0;
-      font-size: 18px;
+      font-size: 20px;
       line-height: 1;
     }
     #zoom-level { font-size: 14px; min-width: 50px; text-align: center; }
     .drop-zone {
       border: 2px dashed #ccc;
       border-radius: 4px;
-      padding: 15px;
+      padding: 12px;
       text-align: center;
       color: #666;
       margin-bottom: 10px;
       transition: all 0.2s;
+      font-size: 14px;
     }
     .drop-zone.dragover {
       border-color: #0066cc;
@@ -120,38 +143,94 @@
       left: 0;
       width: 100%;
       height: 100%;
-      background: rgba(0,0,0,0.8);
+      background: rgba(0,0,0,0.9);
       z-index: 1000;
       justify-content: center;
       align-items: center;
       flex-direction: column;
       padding: 20px;
+      overflow-y: auto;
     }
     .modal.show { display: flex; }
     .modal img {
       max-width: 100%;
-      max-height: 70vh;
+      max-height: 60vh;
       background: white;
       border-radius: 8px;
+      object-fit: contain;
     }
     .modal-text {
       color: white;
       text-align: center;
-      margin: 15px 0;
+      margin: 12px 0;
       font-size: 16px;
+      line-height: 1.4;
     }
-    .modal-close {
+    .modal-buttons {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      justify-content: center;
+      margin-top: 12px;
+    }
+    .modal-btn {
       background: white;
       color: #333;
       border: none;
-      padding: 12px 30px;
+      padding: 14px 24px;
       border-radius: 4px;
       font-size: 16px;
       cursor: pointer;
+      min-width: 120px;
+    }
+    .modal-btn.primary {
+      background: #28a745;
+      color: white;
+    }
+    .modal-btn.share {
+      background: #0066cc;
+      color: white;
+    }
+    
+    /* Responsive */
+    @media (max-width: 768px) {
+      body { padding: 12px; }
+      .panel { min-width: 100%; padding: 14px; }
+      textarea { height: 150px; font-size: 13px; }
+      .controls { gap: 6px; }
+      .control-group { width: 100%; justify-content: space-between; }
+      .control-group select { flex: 1; }
+      h1 { font-size: 1.4rem; }
+      .drop-zone { display: none; } /* Hide on mobile - use paste instead */
+      #preview { min-height: 200px; }
+    }
+    
+    /* PWA install prompt */
+    .install-prompt {
+      display: none;
+      background: #0066cc;
+      color: white;
+      padding: 12px 16px;
+      border-radius: 8px;
+      margin-bottom: 16px;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .install-prompt.show { display: flex; }
+    .install-prompt button {
+      background: white;
+      color: #0066cc;
     }
   </style>
 </head>
 <body>
+  <div class="install-prompt" id="install-prompt">
+    <span>📱 Install this app for offline use</span>
+    <button id="install-btn">Install</button>
+  </div>
+
   <h1>Mermaid to PNG Converter</h1>
   <p class="subtitle">Paste your Mermaid diagram code and export as high-quality PNG</p>
   
@@ -166,7 +245,7 @@
     B -->|Yes| C[Do Something]
     B -->|No| D[Do Something Else]
     C --> E[End]
-    D --> E">graph TD
+    D --> E" data-testid="mermaid-input">graph TD
     A[Start] --> B{Decision}
     B -->|Yes| C[Do Something]
     B -->|No| D[Do Something Else]
@@ -175,8 +254,8 @@
       
       <div class="controls">
         <div class="control-group">
-          <label for="scale" style="margin:0">Scale:</label>
-          <select id="scale">
+          <label for="scale">Scale:</label>
+          <select id="scale" data-testid="scale-select">
             <option value="1">1x</option>
             <option value="2" selected>2x</option>
             <option value="3">3x</option>
@@ -184,8 +263,8 @@
           </select>
         </div>
         <div class="control-group">
-          <label for="theme" style="margin:0">Theme:</label>
-          <select id="theme">
+          <label for="theme">Theme:</label>
+          <select id="theme" data-testid="theme-select">
             <option value="default">Default</option>
             <option value="dark">Dark</option>
             <option value="forest">Forest</option>
@@ -193,8 +272,8 @@
           </select>
         </div>
         <div class="control-group">
-          <label for="bg-color" style="margin:0">Background:</label>
-          <select id="bg-color">
+          <label for="bg-color">Background:</label>
+          <select id="bg-color" data-testid="bg-select">
             <option value="white">White</option>
             <option value="transparent">Transparent</option>
             <option value="#f5f5f5">Light Gray</option>
@@ -203,22 +282,22 @@
       </div>
       
       <div class="controls">
-        <button id="render-btn">Render Preview</button>
-        <button id="download-btn" class="download-btn" disabled>Download PNG</button>
+        <button id="render-btn" class="render-btn" data-testid="render-btn">Render Preview</button>
+        <button id="download-btn" class="download-btn" disabled data-testid="download-btn">Download PNG</button>
       </div>
       
-      <p class="info" id="size-info"></p>
+      <p class="info" id="size-info" data-testid="size-info"></p>
     </div>
     
     <div class="panel">
       <label>Preview</label>
       <div class="zoom-controls">
-        <button class="zoom-btn" id="zoom-out">−</button>
-        <span id="zoom-level">100%</span>
-        <button class="zoom-btn" id="zoom-in">+</button>
-        <button class="zoom-btn" id="zoom-reset" style="width:auto;padding:0 10px;">Reset</button>
+        <button class="zoom-btn" id="zoom-out" data-testid="zoom-out">−</button>
+        <span id="zoom-level" data-testid="zoom-level">100%</span>
+        <button class="zoom-btn" id="zoom-in" data-testid="zoom-in">+</button>
+        <button class="zoom-btn" id="zoom-reset" style="width:auto;padding:0 12px;">Reset</button>
       </div>
-      <div id="preview">
+      <div id="preview" data-testid="preview">
         <div id="preview-inner"></div>
       </div>
     </div>
@@ -229,11 +308,15 @@
   </div>
   
   <!-- Mobile download modal -->
-  <div class="modal" id="mobile-modal">
-    <p class="modal-text">📱 Long-press the image below to save</p>
+  <div class="modal" id="mobile-modal" data-testid="mobile-modal">
+    <p class="modal-text">📱 Save your diagram</p>
     <img id="modal-image" src="" alt="Mermaid diagram">
-    <p class="modal-text">Then tap "Download image" or "Save image"</p>
-    <button class="modal-close" id="modal-close">Close</button>
+    <div class="modal-buttons">
+      <button class="modal-btn share" id="share-btn" style="display:none">Share / Save</button>
+      <button class="modal-btn primary" id="open-btn">Open in New Tab</button>
+      <button class="modal-btn" id="modal-close">Close</button>
+    </div>
+    <p class="modal-text" style="font-size:14px;opacity:0.8">Or long-press the image above to save</p>
   </div>
 
   <script>
@@ -257,12 +340,26 @@
     const mobileModal = document.getElementById('mobile-modal');
     const modalImage = document.getElementById('modal-image');
     const modalClose = document.getElementById('modal-close');
+    const shareBtn = document.getElementById('share-btn');
+    const openBtn = document.getElementById('open-btn');
     
     let currentSvg = null;
     let zoomLevel = 1;
+    let currentDataUrl = null;
     
-    // Detect mobile device
-    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    // Detect mobile/touch device - check multiple conditions
+    function checkIsMobile() {
+      const hasTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+      const smallScreen = window.innerWidth <= 768;
+      const mobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      return hasTouch || smallScreen || mobileUA;
+    }
+    
+    // Check Web Share API support
+    const canShare = navigator.share && navigator.canShare;
+    if (canShare) {
+      shareBtn.style.display = 'block';
+    }
     
     async function renderDiagram() {
       const code = input.value.trim();
@@ -296,16 +393,14 @@
       }
     }
     
-    async function downloadPng() {
-      if (!currentSvg) return;
+    async function generatePng() {
+      if (!currentSvg) return null;
       
       const scale = parseInt(scaleSelect.value);
       const bgColor = bgSelect.value;
       
-      // Clone SVG and prepare for export
       const svgClone = currentSvg.cloneNode(true);
       
-      // Get dimensions
       let width, height;
       if (svgClone.viewBox.baseVal.width) {
         width = svgClone.viewBox.baseVal.width;
@@ -316,11 +411,9 @@
         height = bbox.height;
       }
       
-      // Set explicit dimensions
       svgClone.setAttribute('width', width);
       svgClone.setAttribute('height', height);
       
-      // Add background if not transparent
       if (bgColor !== 'transparent') {
         const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
         rect.setAttribute('width', '100%');
@@ -329,40 +422,73 @@
         svgClone.insertBefore(rect, svgClone.firstChild);
       }
       
-      // Convert to data URL
       const svgData = new XMLSerializer().serializeToString(svgClone);
       const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
       const url = URL.createObjectURL(svgBlob);
       
-      // Draw to canvas at high resolution
-      const img = new Image();
-      img.onload = () => {
-        canvas.width = width * scale;
-        canvas.height = height * scale;
-        
-        const ctx = canvas.getContext('2d');
-        
-        // Enable high quality rendering
-        ctx.imageSmoothingEnabled = true;
-        ctx.imageSmoothingQuality = 'high';
-        
-        // Fill background for non-transparent
-        if (bgColor !== 'transparent') {
-          ctx.fillStyle = bgColor;
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-        }
-        
-        ctx.scale(scale, scale);
-        ctx.drawImage(img, 0, 0);
-        
-        const dataUrl = canvas.toDataURL('image/png');
-        
-        // Mobile: show modal with image for long-press save
-        if (isMobile) {
-          modalImage.src = dataUrl;
-          mobileModal.classList.add('show');
-        } else {
-          // Desktop: trigger download
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+          canvas.width = width * scale;
+          canvas.height = height * scale;
+          
+          const ctx = canvas.getContext('2d');
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = 'high';
+          
+          if (bgColor !== 'transparent') {
+            ctx.fillStyle = bgColor;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+          }
+          
+          ctx.scale(scale, scale);
+          ctx.drawImage(img, 0, 0);
+          
+          URL.revokeObjectURL(url);
+          resolve(canvas.toDataURL('image/png'));
+        };
+        img.onerror = () => {
+          URL.revokeObjectURL(url);
+          resolve(null);
+        };
+        img.src = url;
+      });
+    }
+    
+    async function downloadPng() {
+      const dataUrl = await generatePng();
+      if (!dataUrl) return;
+      
+      currentDataUrl = dataUrl;
+      
+      // Re-check mobile status at download time (viewport may have changed)
+      const isMobile = checkIsMobile();
+      
+      if (isMobile) {
+        // Mobile: show modal with multiple options
+        modalImage.src = dataUrl;
+        mobileModal.classList.add('show');
+      } else {
+        // Desktop: direct download using blob for better compatibility
+        try {
+          const response = await fetch(dataUrl);
+          const blob = await response.blob();
+          const blobUrl = URL.createObjectURL(blob);
+          
+          const link = document.createElement('a');
+          link.download = 'mermaid-diagram.png';
+          link.href = blobUrl;
+          link.style.display = 'none';
+          document.body.appendChild(link);
+          link.click();
+          
+          // Cleanup after a short delay
+          setTimeout(() => {
+            document.body.removeChild(link);
+            URL.revokeObjectURL(blobUrl);
+          }, 100);
+        } catch (err) {
+          // Fallback to data URL
           const link = document.createElement('a');
           link.download = 'mermaid-diagram.png';
           link.href = dataUrl;
@@ -370,11 +496,54 @@
           link.click();
           document.body.removeChild(link);
         }
-        
-        URL.revokeObjectURL(url);
-      };
-      img.src = url;
+      }
     }
+    
+    // Share using Web Share API
+    shareBtn.addEventListener('click', async () => {
+      if (!currentDataUrl) return;
+      
+      try {
+        const response = await fetch(currentDataUrl);
+        const blob = await response.blob();
+        const file = new File([blob], 'mermaid-diagram.png', { type: 'image/png' });
+        
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          await navigator.share({
+            files: [file],
+            title: 'Mermaid Diagram',
+          });
+        } else {
+          // Fallback: share URL
+          await navigator.share({
+            title: 'Mermaid Diagram',
+            text: 'Check out this diagram',
+          });
+        }
+      } catch (err) {
+        if (err.name !== 'AbortError') {
+          console.error('Share failed:', err);
+        }
+      }
+    });
+    
+    // Open in new tab
+    openBtn.addEventListener('click', () => {
+      if (currentDataUrl) {
+        const newTab = window.open();
+        if (newTab) {
+          newTab.document.write(`
+            <html>
+              <head><title>Mermaid Diagram</title></head>
+              <body style="margin:0;display:flex;justify-content:center;align-items:center;min-height:100vh;background:#f5f5f5;">
+                <img src="${currentDataUrl}" style="max-width:100%;height:auto;">
+              </body>
+            </html>
+          `);
+          newTab.document.close();
+        }
+      }
+    });
     
     // Close modal
     modalClose.addEventListener('click', () => {
@@ -386,7 +555,6 @@
         mobileModal.classList.remove('show');
       }
     });
-    }
     
     renderBtn.addEventListener('click', renderDiagram);
     downloadBtn.addEventListener('click', downloadPng);
@@ -453,7 +621,7 @@
       updateZoom();
     });
     
-    // Mouse wheel zoom
+    // Mouse wheel zoom (desktop)
     previewContainer.addEventListener('wheel', e => {
       if (e.ctrlKey) {
         e.preventDefault();
@@ -462,6 +630,57 @@
         updateZoom();
       }
     });
+    
+    // Touch pinch zoom (mobile)
+    let initialDistance = 0;
+    let initialZoom = 1;
+    
+    previewContainer.addEventListener('touchstart', e => {
+      if (e.touches.length === 2) {
+        initialDistance = Math.hypot(
+          e.touches[0].pageX - e.touches[1].pageX,
+          e.touches[0].pageY - e.touches[1].pageY
+        );
+        initialZoom = zoomLevel;
+      }
+    }, { passive: true });
+    
+    previewContainer.addEventListener('touchmove', e => {
+      if (e.touches.length === 2) {
+        const currentDistance = Math.hypot(
+          e.touches[0].pageX - e.touches[1].pageX,
+          e.touches[0].pageY - e.touches[1].pageY
+        );
+        const scale = currentDistance / initialDistance;
+        zoomLevel = Math.max(0.25, Math.min(5, initialZoom * scale));
+        updateZoom();
+      }
+    }, { passive: true });
+    
+    // PWA Install prompt
+    let deferredPrompt;
+    const installPrompt = document.getElementById('install-prompt');
+    const installBtn = document.getElementById('install-btn');
+    
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      installPrompt.classList.add('show');
+    });
+    
+    installBtn.addEventListener('click', async () => {
+      if (deferredPrompt) {
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        deferredPrompt = null;
+        installPrompt.classList.remove('show');
+      }
+    });
+    
+    // Register service worker for PWA
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js').catch(() => {});
+    }
   </script>
 </body>
 </html>
