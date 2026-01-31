@@ -323,6 +323,46 @@
     
     .no-issues .icon { font-size: 3rem; margin-bottom: 16px; }
     
+    .identified-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    
+    .identified-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      background: rgba(255,255,255,0.1);
+      border-radius: 20px;
+      font-size: 0.85rem;
+    }
+    
+    .identified-item.checked {
+      border: 1px solid var(--info);
+    }
+    
+    .identified-item.safe {
+      border: 1px solid var(--safe);
+    }
+    
+    .identified-item .status-icon {
+      font-size: 0.75rem;
+    }
+    
+    .api-source-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 6px;
+    }
+    
+    .api-source-item .api-icon {
+      width: 20px;
+      text-align: center;
+    }
+    
     .extracted-text {
       margin-top: 20px;
       padding: 16px;
@@ -464,9 +504,9 @@
       
       <div class="upload-section">
         <label class="upload-label" for="file-input">
-          <span>📁</span> Or upload an image
+          <span>📁</span> Upload from gallery
         </label>
-        <input type="file" id="file-input" accept="image/*" capture="environment">
+        <input type="file" id="file-input" accept="image/*">
       </div>
     </div>
     
@@ -483,7 +523,23 @@
       
       <div class="summary" id="summary"></div>
       
-      <ul class="ingredient-list" id="ingredient-list"></ul>
+      <!-- Dangerous ingredients found -->
+      <div id="dangerous-section" style="margin-top:20px;">
+        <h3 style="color:var(--danger);margin-bottom:12px;">⚠️ Concerning Ingredients Found</h3>
+        <ul class="ingredient-list" id="ingredient-list"></ul>
+      </div>
+      
+      <!-- All identified ingredients -->
+      <div id="identified-section" style="margin-top:24px;">
+        <h3 style="color:var(--info);margin-bottom:12px;">📋 All Identified Ingredients</h3>
+        <div class="identified-list" id="identified-list"></div>
+      </div>
+      
+      <!-- API Check Summary -->
+      <div id="api-status" style="margin-top:20px;padding:12px;background:rgba(255,255,255,0.05);border-radius:8px;font-size:0.85rem;color:var(--text-muted);">
+        <strong>🔍 Data Sources Checked:</strong>
+        <div id="api-sources"></div>
+      </div>
       
       <button class="extracted-text-toggle" id="text-toggle">
         <span>📄</span> Show extracted text
@@ -736,15 +792,38 @@
      * Main ingredient analysis with hybrid API approach
      */
     async function analyzeIngredientsHybrid(text, onProgress) {
-      const results = [];
+      const dangerousResults = [];
+      const allIdentified = [];
       const checkedIngredients = new Set();
+      const apiStatus = {
+        localDb: { checked: true, found: 0 },
+        openFoodFacts: { checked: false, found: 0, barcode: null },
+        pubChem: { checked: false, found: 0, chemicals: [] }
+      };
       
       // Normalize text
       const normalizedText = text.toLowerCase().replace(/[^\w\s,.-]/g, ' ').replace(/\s+/g, ' ');
       
-      // Extract potential ingredient names (words 3+ chars)
-      const words = normalizedText.split(/[\s,;]+/).filter(w => w.length >= 3);
-      const uniqueWords = [...new Set(words)];
+      // Extract all potential ingredients (words that look like ingredients)
+      const ingredientPatterns = [
+        /\b[a-z]{3,}(?:\s+[a-z]+)?\b/gi,  // Multi-word ingredients
+        /\be\d{3,4}[a-z]?\b/gi,            // E-numbers
+        /\b\w+ate\b/gi,                     // -ate compounds (sulfate, etc)
+        /\b\w+ide\b/gi,                     // -ide compounds (chloride, etc)
+        /\b\w+ose\b/gi,                     // Sugars (-ose)
+        /\b\w+ol\b/gi,                      // Alcohols (-ol)
+      ];
+      
+      const allWords = new Set();
+      for (const pattern of ingredientPatterns) {
+        const matches = normalizedText.match(pattern) || [];
+        matches.forEach(m => {
+          const word = m.trim().toLowerCase();
+          if (word.length >= 3 && !['the', 'and', 'for', 'with', 'from', 'this', 'that', 'ingredients', 'contains', 'may', 'contain'].includes(word)) {
+            allWords.add(word);
+          }
+        });
+      }
       
       // Check for barcode pattern
       const barcodeMatch = text.match(/\b(\d{8,13})\b/);
@@ -754,10 +833,24 @@
       // 1. If barcode found, try Open Food Facts first
       if (barcodeMatch) {
         onProgress?.('Looking up product barcode...', 30);
+        apiStatus.openFoodFacts.checked = true;
+        apiStatus.openFoodFacts.barcode = barcodeMatch[1];
         const product = await getProductByBarcode(barcodeMatch[1]);
         if (product) {
           const productResults = analyzeOpenFoodFactsProduct(product);
-          results.push(...productResults);
+          dangerousResults.push(...productResults);
+          apiStatus.openFoodFacts.found = productResults.length;
+          
+          // Add product ingredients to identified list
+          if (product.ingredients_text) {
+            const prodIngredients = product.ingredients_text.split(/[,;]/).map(i => i.trim().toLowerCase());
+            prodIngredients.forEach(ing => {
+              if (ing.length >= 3) {
+                allWords.add(ing);
+                allIdentified.push({ name: ing, source: 'Open Food Facts', checked: true, safe: true });
+              }
+            });
+          }
           onProgress?.('Product data retrieved!', 50);
         }
       }
@@ -770,12 +863,19 @@
           const regex = new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
           if (regex.test(normalizedText) && !checkedIngredients.has(key)) {
             checkedIngredients.add(key);
-            results.push({
+            apiStatus.localDb.found++;
+            dangerousResults.push({
               name: key.charAt(0).toUpperCase() + key.slice(1),
               matchedAs: name,
               ...data,
               source: 'Local Database'
             });
+            // Mark in identified list
+            const existingIdx = allIdentified.findIndex(i => i.name === name);
+            if (existingIdx >= 0) {
+              allIdentified[existingIdx].safe = false;
+              allIdentified[existingIdx].level = data.level;
+            }
             break;
           }
         }
@@ -805,6 +905,8 @@
       // Limit API calls to 5 chemicals to avoid rate limiting
       const chemicalArray = [...chemicalsToCheck].slice(0, 5);
       let processed = 0;
+      apiStatus.pubChem.checked = chemicalArray.length > 0;
+      apiStatus.pubChem.chemicals = chemicalArray;
       
       for (const chemical of chemicalArray) {
         if (checkedIngredients.has(chemical.toLowerCase())) continue;
@@ -812,11 +914,17 @@
         processed++;
         onProgress?.(`Checking: ${chemical}...`, 60 + (processed / chemicalArray.length) * 30);
         
+        // Add to identified list
+        const identifiedEntry = { name: chemical, source: 'PubChem', checked: true, safe: true };
+        
         try {
           const pubChemData = await getPubChemCompound(chemical);
           if (pubChemData?.hazards?.statements?.length > 0) {
             checkedIngredients.add(chemical.toLowerCase());
-            results.push({
+            apiStatus.pubChem.found++;
+            identifiedEntry.safe = false;
+            identifiedEntry.level = pubChemData.hazards.level;
+            dangerousResults.push({
               name: chemical.charAt(0).toUpperCase() + chemical.slice(1),
               category: pubChemData.hazards.pictograms.length > 0 
                 ? `GHS: ${pubChemData.hazards.pictograms.join(', ')}` 
@@ -829,19 +937,29 @@
           }
         } catch (e) {
           console.warn(`PubChem lookup failed for ${chemical}:`, e);
+          identifiedEntry.checked = false;
         }
+        
+        allIdentified.push(identifiedEntry);
         
         // Small delay to avoid rate limiting
         await new Promise(r => setTimeout(r, 100));
       }
 
+      // Add remaining words as identified (not specifically checked via API)
+      for (const word of allWords) {
+        if (!allIdentified.find(i => i.name.toLowerCase() === word)) {
+          allIdentified.push({ name: word, source: 'OCR', checked: false, safe: null });
+        }
+      }
+
       onProgress?.('Analysis complete!', 100);
 
-      // Sort by danger level
+      // Sort dangerous results by level
       const levelOrder = { danger: 0, warning: 1, caution: 2, info: 3 };
-      results.sort((a, b) => levelOrder[a.level] - levelOrder[b.level]);
+      dangerousResults.sort((a, b) => levelOrder[a.level] - levelOrder[b.level]);
 
-      return results;
+      return { dangerous: dangerousResults, identified: allIdentified, apiStatus };
     }
 
     // ============================================
@@ -1000,9 +1118,11 @@
       }
     }
     
-    function displayResults(ingredients, rawText) {
+    function displayResults(data, rawText) {
       progressSection.classList.remove('active');
       resultsSection.classList.add('active');
+      
+      const { dangerous: ingredients, identified, apiStatus } = data;
       
       // Count by level
       const counts = {
@@ -1031,32 +1151,97 @@
         </div>
       `;
       
-      // Ingredient list
+      // Dangerous ingredients section
+      const dangerousSection = document.getElementById('dangerous-section');
       if (ingredients.length === 0) {
-        ingredientList.innerHTML = `
+        dangerousSection.innerHTML = `
           <div class="no-issues">
             <div class="icon">✅</div>
             <h3>No concerning ingredients detected</h3>
             <p style="color:var(--text-muted);margin-top:8px;">
-              Either this product appears safe, or the ingredients couldn't be fully read.<br>
-              Try scanning again with better lighting if needed.
+              No dangerous ingredients were identified in the scanned text.
             </p>
           </div>
         `;
       } else {
-        ingredientList.innerHTML = ingredients.map(ing => `
-          <li class="ingredient-item ${ing.level}">
-            <div class="ingredient-name">
-              ${ing.name}
-              <span class="badge ${ing.level}">${ing.level}</span>
-            </div>
-            <div class="ingredient-category">${ing.category}</div>
-            <div class="ingredient-info">${ing.info}</div>
-            ${ing.matchedAs && ing.matchedAs !== ing.name.toLowerCase() ? `<div class="ingredient-info" style="font-style:italic;">Detected as: ${ing.matchedAs}</div>` : ''}
-            ${ing.source ? `<div class="ingredient-source">Source: ${ing.source}${ing.cid ? ` <a href="https://pubchem.ncbi.nlm.nih.gov/compound/${ing.cid}" target="_blank" style="color:var(--info);">View on PubChem</a>` : ''}</div>` : ''}
-          </li>
-        `).join('');
+        dangerousSection.innerHTML = `
+          <h3 style="color:var(--danger);margin-bottom:12px;">⚠️ Concerning Ingredients Found (${ingredients.length})</h3>
+          <ul class="ingredient-list" id="ingredient-list">
+            ${ingredients.map(ing => `
+              <li class="ingredient-item ${ing.level}">
+                <div class="ingredient-name">
+                  ${ing.name}
+                  <span class="badge ${ing.level}">${ing.level}</span>
+                </div>
+                <div class="ingredient-category">${ing.category}</div>
+                <div class="ingredient-info">${ing.info}</div>
+                ${ing.matchedAs && ing.matchedAs !== ing.name.toLowerCase() ? `<div class="ingredient-info" style="font-style:italic;">Detected as: ${ing.matchedAs}</div>` : ''}
+                ${ing.source ? `<div class="ingredient-source">Source: ${ing.source}${ing.cid ? ` <a href="https://pubchem.ncbi.nlm.nih.gov/compound/${ing.cid}" target="_blank" style="color:var(--info);">View on PubChem</a>` : ''}</div>` : ''}
+              </li>
+            `).join('')}
+          </ul>
+        `;
       }
+      
+      // All identified ingredients section
+      const identifiedSection = document.getElementById('identified-section');
+      const identifiedList = document.getElementById('identified-list');
+      
+      if (identified.length > 0) {
+        // Sort: checked first, then by name
+        const sortedIdentified = [...identified].sort((a, b) => {
+          if (a.checked !== b.checked) return b.checked - a.checked;
+          return a.name.localeCompare(b.name);
+        });
+        
+        // Limit display to 50 items to avoid clutter
+        const displayItems = sortedIdentified.slice(0, 50);
+        
+        identifiedList.innerHTML = displayItems.map(item => {
+          let statusIcon = '❔';
+          let statusClass = '';
+          
+          if (item.checked) {
+            if (item.safe === false) {
+              statusIcon = '⚠️';
+              statusClass = item.level || 'warning';
+            } else {
+              statusIcon = '✓';
+              statusClass = 'safe';
+            }
+          }
+          
+          return `
+            <span class="identified-item ${item.checked ? 'checked' : ''} ${statusClass}">
+              <span class="status-icon">${statusIcon}</span>
+              ${item.name}
+            </span>
+          `;
+        }).join('');
+        
+        if (sortedIdentified.length > 50) {
+          identifiedList.innerHTML += `<span class="identified-item">+${sortedIdentified.length - 50} more...</span>`;
+        }
+      } else {
+        identifiedList.innerHTML = '<p style="color:var(--text-muted);">No ingredients could be identified from the text.</p>';
+      }
+      
+      // API Status section
+      const apiSources = document.getElementById('api-sources');
+      apiSources.innerHTML = `
+        <div class="api-source-item">
+          <span class="api-icon">📚</span>
+          <span>Local Database: ${apiStatus.localDb.found} dangerous items found</span>
+        </div>
+        <div class="api-source-item">
+          <span class="api-icon">🌐</span>
+          <span>Open Food Facts: ${apiStatus.openFoodFacts.checked ? (apiStatus.openFoodFacts.barcode ? `Barcode ${apiStatus.openFoodFacts.barcode} - ${apiStatus.openFoodFacts.found} issues found` : 'No barcode detected') : 'Not checked'}</span>
+        </div>
+        <div class="api-source-item">
+          <span class="api-icon">🧪</span>
+          <span>PubChem: ${apiStatus.pubChem.checked ? `${apiStatus.pubChem.chemicals.length} chemicals checked, ${apiStatus.pubChem.found} with hazards` : 'No chemicals to check'}</span>
+        </div>
+      `;
     }
 
     // ============================================

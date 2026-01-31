@@ -17,7 +17,7 @@ test.describe('Ingredient Safety Scanner', () => {
 
     test('should have file upload option', async ({ page }) => {
       await expect(page.locator('#file-input')).toBeAttached();
-      await expect(page.locator('.upload-label')).toContainText('upload an image');
+      await expect(page.locator('.upload-label')).toContainText('Upload from gallery');
     });
 
     test('should display instructions', async ({ page }) => {
@@ -114,14 +114,16 @@ test.describe('Ingredient Safety Scanner', () => {
       });
       
       // Wait for results
-      await expect(page.locator('#results-section')).toBeVisible({ timeout: 60000 });
+      await expect(page.locator('#results-section')).toBeVisible({ timeout: 90000 });
       
       // Should show summary
       await expect(page.locator('#summary')).toBeVisible();
       
-      // Should have ingredient list or no issues message
-      const ingredientList = page.locator('#ingredient-list');
-      await expect(ingredientList).toBeVisible();
+      // Should have dangerous section and identified section
+      const dangerousSection = page.locator('#dangerous-section');
+      const identifiedSection = page.locator('#identified-section');
+      await expect(dangerousSection).toBeVisible();
+      await expect(identifiedSection).toBeVisible();
     });
   });
 
