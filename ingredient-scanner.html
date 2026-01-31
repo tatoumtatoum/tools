@@ -902,8 +902,8 @@
         matches.forEach(m => chemicalsToCheck.add(m.trim()));
       }
 
-      // Limit API calls to 5 chemicals to avoid rate limiting
-      const chemicalArray = [...chemicalsToCheck].slice(0, 5);
+      // Limit API calls to 50 chemicals
+      const chemicalArray = [...chemicalsToCheck].slice(0, 50);
       let processed = 0;
       apiStatus.pubChem.checked = chemicalArray.length > 0;
       apiStatus.pubChem.chemicals = chemicalArray;
