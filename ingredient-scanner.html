@@ -881,29 +881,38 @@
         }
       }
 
-      // 3. Query PubChem for suspicious chemical names (limit to save API calls)
+      // 3. Query PubChem for all identified ingredients (not just pattern-matched)
       onProgress?.('Querying chemical database...', 60);
-      const chemicalPatterns = [
-        /\b\w+aldehyde\b/gi,
-        /\b\w+oxide\b/gi,
-        /\b\w+benzene\b/gi,
-        /\b\w+amine\b/gi,
-        /\bsodium\s+\w+\b/gi,
-        /\bpotassium\s+\w+\b/gi,
-        /\b\w+paraben\b/gi,
-        /\b\w+sulfate\b/gi,
-        /\b[a-z]+-\d+\b/gi,
-        /\be\d{3,4}[a-z]?\b/gi
-      ];
-
-      const chemicalsToCheck = new Set();
-      for (const pattern of chemicalPatterns) {
-        const matches = normalizedText.match(pattern) || [];
-        matches.forEach(m => chemicalsToCheck.add(m.trim()));
+      
+      // Extract all potential ingredient names from the text
+      // Split by common separators and filter meaningful words
+      const potentialIngredients = new Set();
+      
+      // Split text by commas, semicolons, and common ingredient list separators
+      const segments = normalizedText.split(/[,;:•·\n\r]+/);
+      for (const segment of segments) {
+        const cleaned = segment.trim();
+        // Skip very short or very long segments, and common non-ingredient words
+        if (cleaned.length >= 3 && cleaned.length <= 50) {
+          const skipWords = ['ingredients', 'contains', 'may contain', 'and', 'or', 'the', 'from', 'with', 'less than', 'more than', 'percent', 'organic', 'natural', 'artificial', 'added', 'for', 'as', 'to'];
+          if (!skipWords.some(w => cleaned === w)) {
+            potentialIngredients.add(cleaned);
+          }
+        }
+      }
+      
+      // Also extract individual words that look like chemical names
+      const wordMatches = normalizedText.match(/\b[a-z][a-z0-9-]{2,30}\b/gi) || [];
+      for (const word of wordMatches) {
+        const w = word.toLowerCase();
+        const skipWords = ['ingredients', 'contains', 'and', 'the', 'for', 'with', 'from', 'this', 'that', 'may', 'contain', 'less', 'than', 'more', 'percent', 'water', 'sugar', 'salt'];
+        if (!skipWords.includes(w) && w.length >= 4) {
+          potentialIngredients.add(w);
+        }
       }
 
-      // Limit API calls to 50 chemicals
-      const chemicalArray = [...chemicalsToCheck].slice(0, 50);
+      // Check up to 50 ingredients against PubChem
+      const chemicalArray = [...potentialIngredients].slice(0, 50);
       let processed = 0;
       apiStatus.pubChem.checked = chemicalArray.length > 0;
       apiStatus.pubChem.chemicals = chemicalArray;
@@ -912,7 +921,7 @@
         if (checkedIngredients.has(chemical.toLowerCase())) continue;
         
         processed++;
-        onProgress?.(`Checking: ${chemical}...`, 60 + (processed / chemicalArray.length) * 30);
+        onProgress?.(`Checking: ${chemical} (${processed}/${chemicalArray.length})...`, 60 + (processed / chemicalArray.length) * 30);
         
         // Add to identified list
         const identifiedEntry = { name: chemical, source: 'PubChem', checked: true, safe: true };
