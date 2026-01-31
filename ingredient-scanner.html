@@ -302,6 +302,13 @@
       color: var(--text-muted);
     }
     
+    .ingredient-source {
+      margin-top: 6px;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      opacity: 0.8;
+    }
+    
     .ingredient-category {
       font-size: 0.8rem;
       color: var(--info);
@@ -501,339 +508,341 @@
 
   <script>
     // ============================================
-    // DANGEROUS INGREDIENTS DATABASE
+    // API CONFIGURATION
     // ============================================
-    const DANGEROUS_INGREDIENTS = {
-      // ----------------------------------------
-      // CARCINOGENS (IARC Group 1, 2A, 2B)
-      // ----------------------------------------
-      'formaldehyde': {
-        level: 'danger',
-        category: 'Carcinogen (IARC Group 1)',
-        info: 'Known human carcinogen. Can cause cancer of the nasopharynx and leukemia. Common in hair straightening treatments and some nail products.',
-        aliases: ['formalin', 'methyl aldehyde', 'methylene oxide', 'formic aldehyde']
+    const API_CONFIG = {
+      openFoodFacts: {
+        baseUrl: 'https://world.openfoodfacts.org/api/v2',
+        searchUrl: 'https://world.openfoodfacts.org/cgi/search.pl'
       },
-      'benzene': {
-        level: 'danger',
-        category: 'Carcinogen (IARC Group 1)',
-        info: 'Known human carcinogen causing leukemia. Should not be in consumer products but has been found as contaminant in some sunscreens and personal care items.',
-        aliases: ['benzol', 'phenyl hydride']
-      },
-      'asbestos': {
-        level: 'danger',
-        category: 'Carcinogen (IARC Group 1)',
-        info: 'Known carcinogen causing mesothelioma and lung cancer. Has been found as contaminant in talc products.',
-        aliases: ['chrysotile', 'amosite', 'crocidolite']
-      },
-      'coal tar': {
-        level: 'danger',
-        category: 'Carcinogen (IARC Group 1)',
-        info: 'Known human carcinogen. Found in some anti-dandruff shampoos and hair dyes. Contains PAHs.',
-        aliases: ['coal tar solution', 'crude coal tar', 'coal tar pitch']
-      },
-      'ethylene oxide': {
-        level: 'danger',
-        category: 'Carcinogen (IARC Group 1)',
-        info: 'Known human carcinogen. Used as sterilizing agent, can remain as residue in some products.',
-        aliases: ['oxirane', 'epoxyethane']
-      },
-      'styrene': {
-        level: 'warning',
-        category: 'Probable Carcinogen (IARC Group 2A)',
-        info: 'Probably carcinogenic to humans. Can leach from polystyrene containers especially when heated.',
-        aliases: ['ethenylbenzene', 'vinylbenzene', 'phenylethylene']
-      },
-      'acrylamide': {
-        level: 'warning',
-        category: 'Probable Carcinogen (IARC Group 2A)',
-        info: 'Probably carcinogenic. Forms in starchy foods cooked at high temperatures (frying, baking). Also in some cosmetics.',
-        aliases: ['acrylic amide', '2-propenamide']
-      },
-      
-      // ----------------------------------------
-      // ENDOCRINE DISRUPTORS
-      // ----------------------------------------
-      'bpa': {
-        level: 'danger',
-        category: 'Endocrine Disruptor',
-        info: 'Disrupts hormone function, linked to reproductive issues, obesity, diabetes, and behavioral problems. Banned in baby products in many countries.',
-        aliases: ['bisphenol a', 'bisphenol-a', '4,4\'-isopropylidenediphenol']
-      },
-      'phthalate': {
-        level: 'warning',
-        category: 'Endocrine Disruptor',
-        info: 'Hormone disruptors linked to reproductive and developmental issues. Often hidden under "fragrance" or "parfum".',
-        aliases: ['dibutyl phthalate', 'dbp', 'dehp', 'diethyl phthalate', 'dep', 'dimethyl phthalate', 'dmp', 'benzyl butyl phthalate', 'bbp']
-      },
-      'triclosan': {
-        level: 'warning',
-        category: 'Endocrine Disruptor / Antimicrobial',
-        info: 'Hormone disruptor, contributes to antibiotic resistance. Banned in hand soaps in US but still in some products.',
-        aliases: ['irgasan', '5-chloro-2-(2,4-dichlorophenoxy)phenol']
-      },
-      'oxybenzone': {
-        level: 'warning',
-        category: 'Endocrine Disruptor / UV Filter',
-        info: 'Hormone disruptor absorbed through skin. Harmful to coral reefs. Banned in Hawaii and Key West.',
-        aliases: ['benzophenone-3', 'bp-3']
-      },
-      'octinoxate': {
-        level: 'caution',
-        category: 'Potential Endocrine Disruptor',
-        info: 'UV filter with potential hormone-disrupting effects. Harmful to coral reefs. Banned in Hawaii.',
-        aliases: ['octyl methoxycinnamate', 'ethylhexyl methoxycinnamate', 'omc']
-      },
-      
-      // ----------------------------------------
-      // PARABENS
-      // ----------------------------------------
-      'paraben': {
-        level: 'caution',
-        category: 'Preservative / Potential Endocrine Disruptor',
-        info: 'Preservatives that may mimic estrogen. Concerns about accumulation and potential link to breast cancer. Debate ongoing.',
-        aliases: ['methylparaben', 'ethylparaben', 'propylparaben', 'butylparaben', 'isobutylparaben', 'isopropylparaben']
-      },
-      
-      // ----------------------------------------
-      // FOOD ADDITIVES - HIGH CONCERN
-      // ----------------------------------------
-      'sodium nitrite': {
-        level: 'warning',
-        category: 'Food Preservative / Possible Carcinogen',
-        info: 'Can form carcinogenic nitrosamines when heated or combined with stomach acid. Common in processed meats.',
-        aliases: ['e250', 'nitrite', 'sodium nitrate', 'e251', 'potassium nitrite', 'e249', 'potassium nitrate', 'e252']
-      },
-      'potassium bromate': {
-        level: 'danger',
-        category: 'Food Additive / Possible Carcinogen',
-        info: 'Possible human carcinogen. Banned in EU, UK, Canada, Brazil. Still allowed in US bread products.',
-        aliases: ['e924', 'bromate', 'bromated flour']
-      },
-      'bha': {
-        level: 'warning',
-        category: 'Food Preservative / Possible Carcinogen (IARC 2B)',
-        info: 'Possible human carcinogen and endocrine disruptor. Used to prevent fats from going rancid.',
-        aliases: ['butylated hydroxyanisole', 'e320']
-      },
-      'bht': {
-        level: 'caution',
-        category: 'Food Preservative / Possible Endocrine Disruptor',
-        info: 'Similar to BHA, some concerns about endocrine disruption. Used in cereals, snacks, and cosmetics.',
-        aliases: ['butylated hydroxytoluene', 'e321']
-      },
-      'propyl gallate': {
-        level: 'caution',
-        category: 'Food Preservative / Possible Endocrine Disruptor',
-        info: 'Antioxidant preservative with some evidence of endocrine disruption and tumor growth in studies.',
-        aliases: ['e310']
-      },
-      'azodicarbonamide': {
-        level: 'warning',
-        category: 'Food Additive / Respiratory Sensitizer',
-        info: 'Dough conditioner linked to asthma. Banned in EU and Australia. Breaks down into carcinogenic compounds.',
-        aliases: ['ada', 'e927a']
-      },
-      
-      // ----------------------------------------
-      // ARTIFICIAL COLORS - CONCERNS
-      // ----------------------------------------
-      'red 40': {
-        level: 'caution',
-        category: 'Artificial Color / Behavioral Concerns',
-        info: 'Linked to hyperactivity in children. Contains benzidine, a carcinogen. Requires warning label in EU.',
-        aliases: ['allura red', 'fd&c red 40', 'e129', 'red 40 lake', 'ci 16035']
-      },
-      'yellow 5': {
-        level: 'caution',
-        category: 'Artificial Color / Allergen',
-        info: 'Can cause allergic reactions, hyperactivity. Contains benzidine. Requires warning label in EU.',
-        aliases: ['tartrazine', 'fd&c yellow 5', 'e102', 'ci 19140']
-      },
-      'yellow 6': {
-        level: 'caution',
-        category: 'Artificial Color / Possible Carcinogen',
-        info: 'Contains carcinogens benzidine and 4-aminobiphenyl. Linked to ADHD, allergies.',
-        aliases: ['sunset yellow', 'fd&c yellow 6', 'e110', 'ci 15985']
-      },
-      'red 3': {
-        level: 'warning',
-        category: 'Artificial Color / Carcinogen',
-        info: 'Recognized as thyroid carcinogen by FDA. Banned in cosmetics but still allowed in food.',
-        aliases: ['erythrosine', 'fd&c red 3', 'e127', 'ci 45430']
-      },
-      'blue 1': {
-        level: 'caution',
-        category: 'Artificial Color',
-        info: 'May cross blood-brain barrier. Some studies show tumor formation in mice.',
-        aliases: ['brilliant blue', 'fd&c blue 1', 'e133', 'ci 42090']
-      },
-      'blue 2': {
-        level: 'caution',
-        category: 'Artificial Color',
-        info: 'Associated with brain tumors in male rats. Limited human data.',
-        aliases: ['indigo carmine', 'fd&c blue 2', 'e132', 'ci 73015']
-      },
-      'green 3': {
-        level: 'caution',
-        category: 'Artificial Color',
-        info: 'Linked to bladder and testes tumors in animal studies.',
-        aliases: ['fast green', 'fd&c green 3', 'e143', 'ci 42053']
-      },
-      'caramel color': {
-        level: 'caution',
-        category: 'Color Additive / Possible Carcinogen',
-        info: 'Class III and IV contain 4-MEI, a possible carcinogen. Common in sodas and many processed foods.',
-        aliases: ['e150', 'e150a', 'e150b', 'e150c', 'e150d', 'caramel coloring', 'ammonia caramel']
-      },
-      
-      // ----------------------------------------
-      // ARTIFICIAL SWEETENERS - CONTROVERSIAL
-      // ----------------------------------------
-      'aspartame': {
-        level: 'caution',
-        category: 'Artificial Sweetener / IARC 2B',
-        info: 'Classified as possibly carcinogenic (IARC 2B) in 2023. Controversial - more research needed.',
-        aliases: ['e951', 'equal', 'nutrasweet', 'aspartyl-phenylalanine-1-methyl ester']
-      },
-      'saccharin': {
-        level: 'caution',
-        category: 'Artificial Sweetener',
-        info: 'Once listed as carcinogen, delisted in 2000. Still has warning labels in some countries.',
-        aliases: ['e954', 'sweet n low', 'sodium saccharin', 'benzoic sulfimide']
-      },
-      'sucralose': {
-        level: 'caution',
-        category: 'Artificial Sweetener',
-        info: 'Some studies suggest it may affect gut bacteria and glucose metabolism. More research needed.',
-        aliases: ['e955', 'splenda', 'trichlorogalactosucrose']
-      },
-      'acesulfame': {
-        level: 'caution',
-        category: 'Artificial Sweetener',
-        info: 'Contains methylene chloride, a potential carcinogen. Limited long-term studies.',
-        aliases: ['acesulfame potassium', 'acesulfame k', 'ace-k', 'e950']
-      },
-      
-      // ----------------------------------------
-      // COSMETIC INGREDIENTS - HIGH CONCERN
-      // ----------------------------------------
-      'lead': {
-        level: 'danger',
-        category: 'Heavy Metal / Neurotoxin',
-        info: 'Potent neurotoxin, no safe level. Found as contaminant in some lipsticks and hair dyes.',
-        aliases: ['lead acetate', 'lead compounds']
-      },
-      'mercury': {
-        level: 'danger',
-        category: 'Heavy Metal / Neurotoxin',
-        info: 'Highly toxic to nervous system. Found in some skin lightening creams (illegally).',
-        aliases: ['mercurous chloride', 'calomel', 'mercuric', 'thimerosal']
-      },
-      'hydroquinone': {
-        level: 'warning',
-        category: 'Skin Lightener / Possible Carcinogen',
-        info: 'Skin bleaching agent, possible carcinogen. Banned in EU cosmetics. Can cause ochronosis.',
-        aliases: ['1,4-benzenediol', 'benzene-1,4-diol']
-      },
-      'toluene': {
-        level: 'warning',
-        category: 'Solvent / Reproductive Toxin',
-        info: 'Toxic to nervous system and reproductive system. Common in nail polish.',
-        aliases: ['methylbenzene', 'toluol', 'phenylmethane']
-      },
-      'petroleum distillates': {
-        level: 'caution',
-        category: 'Solvent / Possible Carcinogen',
-        info: 'May contain carcinogenic impurities. Found in mascara, some skincare.',
-        aliases: ['petroleum', 'petrolatum', 'mineral oil', 'paraffin', 'microcrystalline wax']
-      },
-      'talc': {
-        level: 'caution',
-        category: 'Mineral / Possible Asbestos Contamination',
-        info: 'Concerns about asbestos contamination. Links to ovarian cancer when used genitally.',
-        aliases: ['talcum', 'talcum powder', 'magnesium silicate']
-      },
-      'diethanolamine': {
-        level: 'warning',
-        category: 'Emulsifier / Possible Carcinogen',
-        info: 'Can react with other ingredients to form carcinogenic nitrosamines. Skin irritant.',
-        aliases: ['dea', 'cocamide dea', 'lauramide dea', 'mea', 'tea', 'triethanolamine']
-      },
-      '1,4-dioxane': {
-        level: 'danger',
-        category: 'Contaminant / Probable Carcinogen',
-        info: 'Probable carcinogen found as contaminant in many products with "eth" ingredients (like sodium laureth sulfate).',
-        aliases: ['dioxane']
-      },
-      'pfas': {
-        level: 'danger',
-        category: 'Forever Chemicals',
-        info: 'Persistent chemicals linked to cancer, immune system harm, developmental issues. Found in waterproof cosmetics.',
-        aliases: ['pfoa', 'pfos', 'ptfe', 'teflon', 'perfluor', 'polyfluor']
-      },
-      'resorcinol': {
-        level: 'warning',
-        category: 'Hair Dye / Endocrine Disruptor',
-        info: 'Endocrine disruptor, skin sensitizer. Common in hair dyes.',
-        aliases: ['1,3-benzenediol', 'm-dihydroxybenzene']
-      },
-      'p-phenylenediamine': {
-        level: 'warning',
-        category: 'Hair Dye / Allergen',
-        info: 'Strong allergen and sensitizer. Can cause severe allergic reactions. Common in permanent hair dyes.',
-        aliases: ['ppd', '1,4-benzenediamine', 'para-phenylenediamine']
-      },
-      
-      // ----------------------------------------
-      // FRAGRANCES & HIDDEN INGREDIENTS
-      // ----------------------------------------
-      'fragrance': {
-        level: 'caution',
-        category: 'Undisclosed Mixture',
-        info: 'Can contain 100+ undisclosed chemicals including phthalates, allergens, and sensitizers. No way to know what\'s inside.',
-        aliases: ['parfum', 'perfume', 'aroma', 'natural fragrance', 'fragrance oil']
-      },
-      
-      // ----------------------------------------
-      // PALM OIL (Environmental/Health Concerns)
-      // ----------------------------------------
-      'palm oil': {
-        level: 'caution',
-        category: 'Environmental / Health Concerns',
-        info: 'High in saturated fat. Processing can create 3-MCPD and glycidyl esters (potential carcinogens). Major deforestation driver.',
-        aliases: ['palm kernel oil', 'palmitate', 'palmate', 'sodium palm kernelate', 'glyceryl stearate', 'stearic acid']
-      },
-      
-      // ----------------------------------------
-      // TRANS FATS
-      // ----------------------------------------
-      'trans fat': {
-        level: 'danger',
-        category: 'Dietary Fat / Cardiovascular Risk',
-        info: 'Strongly linked to heart disease, stroke, type 2 diabetes. WHO called for global ban.',
-        aliases: ['partially hydrogenated', 'hydrogenated oil', 'shortening', 'margarine']
-      },
-      
-      // ----------------------------------------
-      // MSG (Controversial)
-      // ----------------------------------------
-      'msg': {
-        level: 'caution',
-        category: 'Flavor Enhancer / Controversial',
-        info: 'Generally recognized as safe by FDA, but some people report sensitivity. May be hidden under other names.',
-        aliases: ['monosodium glutamate', 'e621', 'glutamic acid', 'hydrolyzed protein', 'autolyzed yeast', 'yeast extract', 'natural flavoring']
-      },
-      
-      // ----------------------------------------
-      // HIGH FRUCTOSE CORN SYRUP
-      // ----------------------------------------
-      'high fructose corn syrup': {
-        level: 'caution',
-        category: 'Sweetener / Metabolic Concerns',
-        info: 'Linked to obesity, diabetes, fatty liver disease when consumed in excess. Ubiquitous in processed foods.',
-        aliases: ['hfcs', 'corn syrup', 'glucose-fructose', 'isoglucose', 'glucose syrup']
+      pubChem: {
+        baseUrl: 'https://pubchem.ncbi.nlm.nih.gov/rest/pug'
       }
     };
+
+    // ============================================
+    // FALLBACK DATABASE (Essential items only)
+    // Used when APIs are unavailable
+    // ============================================
+    const FALLBACK_INGREDIENTS = {
+      // Critical carcinogens
+      'formaldehyde': { level: 'danger', category: 'Carcinogen (IARC Group 1)', info: 'Known human carcinogen. Can cause cancer.' },
+      'benzene': { level: 'danger', category: 'Carcinogen (IARC Group 1)', info: 'Known carcinogen causing leukemia.' },
+      'asbestos': { level: 'danger', category: 'Carcinogen (IARC Group 1)', info: 'Causes mesothelioma and lung cancer.' },
+      // Critical toxins
+      'lead': { level: 'danger', category: 'Heavy Metal / Neurotoxin', info: 'Potent neurotoxin, no safe level.' },
+      'mercury': { level: 'danger', category: 'Heavy Metal / Neurotoxin', info: 'Highly toxic to nervous system.' },
+      // PFAS
+      'pfas': { level: 'danger', category: 'Forever Chemicals', info: 'Persistent chemicals linked to cancer.', aliases: ['pfoa', 'pfos', 'ptfe'] },
+      // Trans fats
+      'trans fat': { level: 'danger', category: 'Cardiovascular Risk', info: 'Strongly linked to heart disease.', aliases: ['partially hydrogenated'] }
+    };
+
+    // ============================================
+    // API SERVICES
+    // ============================================
+    
+    /**
+     * Open Food Facts API - Get product by barcode
+     */
+    async function getProductByBarcode(barcode) {
+      try {
+        const response = await fetch(`${API_CONFIG.openFoodFacts.baseUrl}/product/${barcode}.json`);
+        if (!response.ok) return null;
+        const data = await response.json();
+        return data.status === 1 ? data.product : null;
+      } catch (error) {
+        console.warn('Open Food Facts API error:', error);
+        return null;
+      }
+    }
+
+    /**
+     * Open Food Facts API - Search ingredients
+     */
+    async function searchOpenFoodFactsIngredient(ingredientName) {
+      try {
+        const url = `${API_CONFIG.openFoodFacts.searchUrl}?search_terms=${encodeURIComponent(ingredientName)}&search_simple=1&action=process&json=1&page_size=5`;
+        const response = await fetch(url);
+        if (!response.ok) return null;
+        return await response.json();
+      } catch (error) {
+        console.warn('Open Food Facts search error:', error);
+        return null;
+      }
+    }
+
+    /**
+     * PubChem API - Get compound safety data by name
+     */
+    async function getPubChemCompound(name) {
+      try {
+        // First get CID
+        const searchUrl = `${API_CONFIG.pubChem.baseUrl}/compound/name/${encodeURIComponent(name)}/cids/JSON`;
+        const cidResponse = await fetch(searchUrl);
+        if (!cidResponse.ok) return null;
+        
+        const cidData = await cidResponse.json();
+        const cid = cidData?.IdentifierList?.CID?.[0];
+        if (!cid) return null;
+
+        // Get compound properties including GHS hazard info
+        const propsUrl = `${API_CONFIG.pubChem.baseUrl}/compound/cid/${cid}/property/IUPACName,MolecularFormula/JSON`;
+        const propsResponse = await fetch(propsUrl);
+        
+        // Get GHS classification
+        const ghsUrl = `${API_CONFIG.pubChem.baseUrl}/compound/cid/${cid}/property/Title/JSON`;
+        
+        // Get hazard data from PUG View
+        const hazardUrl = `https://pubchem.ncbi.nlm.nih.gov/rest/pug_view/data/compound/${cid}/JSON?heading=GHS+Classification`;
+        
+        const [propsData, hazardResponse] = await Promise.all([
+          propsResponse.json().catch(() => null),
+          fetch(hazardUrl).then(r => r.ok ? r.json() : null).catch(() => null)
+        ]);
+
+        return {
+          cid,
+          name,
+          properties: propsData?.PropertyTable?.Properties?.[0],
+          hazards: parseGHSHazards(hazardResponse)
+        };
+      } catch (error) {
+        console.warn('PubChem API error:', error);
+        return null;
+      }
+    }
+
+    /**
+     * Parse GHS hazard information from PubChem response
+     */
+    function parseGHSHazards(data) {
+      if (!data?.Record?.Section) return null;
+      
+      const hazards = {
+        pictograms: [],
+        statements: [],
+        level: 'caution'
+      };
+
+      try {
+        const ghsSection = data.Record.Section.find(s => s.TOCHeading === 'GHS Classification');
+        if (!ghsSection?.Section) return null;
+
+        for (const section of ghsSection.Section) {
+          if (section.TOCHeading === 'Pictogram(s)' && section.Information) {
+            for (const info of section.Information) {
+              if (info.Value?.StringWithMarkup) {
+                hazards.pictograms.push(...info.Value.StringWithMarkup.map(s => s.String));
+              }
+            }
+          }
+          if (section.TOCHeading === 'GHS Hazard Statements' && section.Information) {
+            for (const info of section.Information) {
+              if (info.Value?.StringWithMarkup) {
+                hazards.statements.push(...info.Value.StringWithMarkup.map(s => s.String));
+              }
+            }
+          }
+        }
+
+        // Determine danger level based on hazard statements
+        const statementText = hazards.statements.join(' ').toLowerCase();
+        if (statementText.includes('fatal') || statementText.includes('cancer') || 
+            statementText.includes('genetic defect') || statementText.includes('may cause death')) {
+          hazards.level = 'danger';
+        } else if (statementText.includes('toxic') || statementText.includes('harmful') ||
+                   statementText.includes('corrosive') || statementText.includes('serious')) {
+          hazards.level = 'warning';
+        }
+
+        return hazards;
+      } catch (e) {
+        return null;
+      }
+    }
+
+    /**
+     * Analyze additives from Open Food Facts product data
+     */
+    function analyzeOpenFoodFactsProduct(product) {
+      const results = [];
+      
+      // Check additives
+      if (product.additives_tags) {
+        for (const additive of product.additives_tags) {
+          const code = additive.replace('en:', '').toUpperCase();
+          results.push({
+            name: code,
+            category: 'Food Additive',
+            level: getAdditiveRiskLevel(code),
+            info: `Additive ${code} found in product`,
+            source: 'Open Food Facts'
+          });
+        }
+      }
+
+      // Check NOVA group (food processing level)
+      if (product.nova_group >= 4) {
+        results.push({
+          name: 'Ultra-Processed Food',
+          category: `NOVA Group ${product.nova_group}`,
+          level: 'caution',
+          info: 'This is an ultra-processed food. High consumption linked to various health issues.',
+          source: 'Open Food Facts'
+        });
+      }
+
+      // Check allergens
+      if (product.allergens_tags && product.allergens_tags.length > 0) {
+        results.push({
+          name: 'Contains Allergens',
+          category: 'Allergen Warning',
+          level: 'warning',
+          info: `Allergens: ${product.allergens_tags.map(a => a.replace('en:', '')).join(', ')}`,
+          source: 'Open Food Facts'
+        });
+      }
+
+      // Check Nutri-Score
+      if (product.nutriscore_grade === 'e') {
+        results.push({
+          name: 'Poor Nutritional Quality',
+          category: 'Nutri-Score E',
+          level: 'caution',
+          info: 'This product has the lowest nutritional rating.',
+          source: 'Open Food Facts'
+        });
+      }
+
+      return results;
+    }
+
+    /**
+     * Get risk level for common food additives
+     */
+    function getAdditiveRiskLevel(code) {
+      const dangerousAdditives = ['E250', 'E251', 'E924', 'E127', 'E131'];
+      const warningAdditives = ['E320', 'E321', 'E129', 'E102', 'E110', 'E621', 'E951'];
+      const cautionAdditives = ['E150', 'E150C', 'E150D', 'E950', 'E954', 'E955'];
+      
+      if (dangerousAdditives.includes(code)) return 'danger';
+      if (warningAdditives.includes(code)) return 'warning';
+      if (cautionAdditives.includes(code)) return 'caution';
+      return 'info';
+    }
+
+    /**
+     * Main ingredient analysis with hybrid API approach
+     */
+    async function analyzeIngredientsHybrid(text, onProgress) {
+      const results = [];
+      const checkedIngredients = new Set();
+      
+      // Normalize text
+      const normalizedText = text.toLowerCase().replace(/[^\w\s,.-]/g, ' ').replace(/\s+/g, ' ');
+      
+      // Extract potential ingredient names (words 3+ chars)
+      const words = normalizedText.split(/[\s,;]+/).filter(w => w.length >= 3);
+      const uniqueWords = [...new Set(words)];
+      
+      // Check for barcode pattern
+      const barcodeMatch = text.match(/\b(\d{8,13})\b/);
+      
+      onProgress?.('Analyzing ingredients...', 20);
+
+      // 1. If barcode found, try Open Food Facts first
+      if (barcodeMatch) {
+        onProgress?.('Looking up product barcode...', 30);
+        const product = await getProductByBarcode(barcodeMatch[1]);
+        if (product) {
+          const productResults = analyzeOpenFoodFactsProduct(product);
+          results.push(...productResults);
+          onProgress?.('Product data retrieved!', 50);
+        }
+      }
+
+      // 2. Check against fallback database (fast, no API calls)
+      onProgress?.('Checking local database...', 40);
+      for (const [key, data] of Object.entries(FALLBACK_INGREDIENTS)) {
+        const allNames = [key, ...(data.aliases || [])];
+        for (const name of allNames) {
+          const regex = new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+          if (regex.test(normalizedText) && !checkedIngredients.has(key)) {
+            checkedIngredients.add(key);
+            results.push({
+              name: key.charAt(0).toUpperCase() + key.slice(1),
+              matchedAs: name,
+              ...data,
+              source: 'Local Database'
+            });
+            break;
+          }
+        }
+      }
+
+      // 3. Query PubChem for suspicious chemical names (limit to save API calls)
+      onProgress?.('Querying chemical database...', 60);
+      const chemicalPatterns = [
+        /\b\w+aldehyde\b/gi,
+        /\b\w+oxide\b/gi,
+        /\b\w+benzene\b/gi,
+        /\b\w+amine\b/gi,
+        /\bsodium\s+\w+\b/gi,
+        /\bpotassium\s+\w+\b/gi,
+        /\b\w+paraben\b/gi,
+        /\b\w+sulfate\b/gi,
+        /\b[a-z]+-\d+\b/gi,
+        /\be\d{3,4}[a-z]?\b/gi
+      ];
+
+      const chemicalsToCheck = new Set();
+      for (const pattern of chemicalPatterns) {
+        const matches = normalizedText.match(pattern) || [];
+        matches.forEach(m => chemicalsToCheck.add(m.trim()));
+      }
+
+      // Limit API calls to 5 chemicals to avoid rate limiting
+      const chemicalArray = [...chemicalsToCheck].slice(0, 5);
+      let processed = 0;
+      
+      for (const chemical of chemicalArray) {
+        if (checkedIngredients.has(chemical.toLowerCase())) continue;
+        
+        processed++;
+        onProgress?.(`Checking: ${chemical}...`, 60 + (processed / chemicalArray.length) * 30);
+        
+        try {
+          const pubChemData = await getPubChemCompound(chemical);
+          if (pubChemData?.hazards?.statements?.length > 0) {
+            checkedIngredients.add(chemical.toLowerCase());
+            results.push({
+              name: chemical.charAt(0).toUpperCase() + chemical.slice(1),
+              category: pubChemData.hazards.pictograms.length > 0 
+                ? `GHS: ${pubChemData.hazards.pictograms.join(', ')}` 
+                : 'Chemical Compound',
+              level: pubChemData.hazards.level,
+              info: pubChemData.hazards.statements.slice(0, 2).join(' '),
+              source: 'PubChem',
+              cid: pubChemData.cid
+            });
+          }
+        } catch (e) {
+          console.warn(`PubChem lookup failed for ${chemical}:`, e);
+        }
+        
+        // Small delay to avoid rate limiting
+        await new Promise(r => setTimeout(r, 100));
+      }
+
+      onProgress?.('Analysis complete!', 100);
+
+      // Sort by danger level
+      const levelOrder = { danger: 0, warning: 1, caution: 2, info: 3 };
+      results.sort((a, b) => levelOrder[a.level] - levelOrder[b.level]);
+
+      return results;
+    }
 
     // ============================================
     // APP STATE & DOM ELEMENTS
@@ -959,7 +968,7 @@
           {
             logger: m => {
               if (m.status === 'recognizing text') {
-                const progress = Math.round(m.progress * 80) + 20;
+                const progress = Math.round(m.progress * 50) + 10;
                 progressFill.style.width = `${progress}%`;
                 progressText.textContent = `Recognizing text... ${Math.round(m.progress * 100)}%`;
               } else if (m.status === 'loading language traineddata') {
@@ -970,58 +979,25 @@
           }
         );
         
-        progressFill.style.width = '100%';
-        progressText.textContent = 'Analyzing ingredients...';
+        progressFill.style.width = '60%';
+        progressText.textContent = 'Querying safety databases...';
         
         const extractedText = result.data.text;
-        analyzeIngredients(extractedText);
+        extractedTextDiv.textContent = extractedText;
+        
+        // Use hybrid API approach
+        const ingredients = await analyzeIngredientsHybrid(extractedText, (msg, pct) => {
+          progressText.textContent = msg;
+          progressFill.style.width = `${60 + (pct * 0.4)}%`;
+        });
+        
+        displayResults(ingredients, extractedText);
         
       } catch (err) {
         console.error('OCR Error:', err);
         progressText.textContent = `Error: ${err.message}`;
         progressFill.style.background = 'var(--danger)';
       }
-    }
-    
-    function analyzeIngredients(text) {
-      // Normalize text
-      const normalizedText = text.toLowerCase()
-        .replace(/[^\w\s,.-]/g, ' ')
-        .replace(/\s+/g, ' ');
-      
-      extractedTextDiv.textContent = text;
-      
-      const foundIngredients = [];
-      const checkedIngredients = new Set();
-      
-      // Search for each dangerous ingredient
-      for (const [key, data] of Object.entries(DANGEROUS_INGREDIENTS)) {
-        // Check main name
-        const allNames = [key, ...(data.aliases || [])];
-        
-        for (const name of allNames) {
-          const searchName = name.toLowerCase();
-          
-          // Use word boundary matching for better accuracy
-          const regex = new RegExp(`\\b${searchName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
-          
-          if (regex.test(normalizedText) && !checkedIngredients.has(key)) {
-            checkedIngredients.add(key);
-            foundIngredients.push({
-              name: key.charAt(0).toUpperCase() + key.slice(1),
-              matchedAs: name,
-              ...data
-            });
-            break;
-          }
-        }
-      }
-      
-      // Sort by danger level
-      const levelOrder = { danger: 0, warning: 1, caution: 2 };
-      foundIngredients.sort((a, b) => levelOrder[a.level] - levelOrder[b.level]);
-      
-      displayResults(foundIngredients, text);
     }
     
     function displayResults(ingredients, rawText) {
@@ -1076,7 +1052,8 @@
             </div>
             <div class="ingredient-category">${ing.category}</div>
             <div class="ingredient-info">${ing.info}</div>
-            ${ing.matchedAs !== ing.name.toLowerCase() ? `<div class="ingredient-info" style="font-style:italic;">Detected as: ${ing.matchedAs}</div>` : ''}
+            ${ing.matchedAs && ing.matchedAs !== ing.name.toLowerCase() ? `<div class="ingredient-info" style="font-style:italic;">Detected as: ${ing.matchedAs}</div>` : ''}
+            ${ing.source ? `<div class="ingredient-source">Source: ${ing.source}${ing.cid ? ` <a href="https://pubchem.ncbi.nlm.nih.gov/compound/${ing.cid}" target="_blank" style="color:var(--info);">View on PubChem</a>` : ''}</div>` : ''}
           </li>
         `).join('');
       }
