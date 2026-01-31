@@ -881,33 +881,31 @@
         }
       }
 
-      // 3. Query PubChem for all identified ingredients (not just pattern-matched)
+      // 3. Query PubChem for all identified ingredients
       onProgress?.('Querying chemical database...', 60);
       
-      // Extract all potential ingredient names from the text
-      // Split by common separators and filter meaningful words
+      // Extract ingredient names from text - keep multi-word compounds together
       const potentialIngredients = new Set();
       
       // Split text by commas, semicolons, and common ingredient list separators
-      const segments = normalizedText.split(/[,;:•·\n\r]+/);
+      const segments = normalizedText.split(/[,;:•·\n\r\(\)]+/);
       for (const segment of segments) {
-        const cleaned = segment.trim();
-        // Skip very short or very long segments, and common non-ingredient words
-        if (cleaned.length >= 3 && cleaned.length <= 50) {
-          const skipWords = ['ingredients', 'contains', 'may contain', 'and', 'or', 'the', 'from', 'with', 'less than', 'more than', 'percent', 'organic', 'natural', 'artificial', 'added', 'for', 'as', 'to'];
-          if (!skipWords.some(w => cleaned === w)) {
-            potentialIngredients.add(cleaned);
-          }
-        }
-      }
-      
-      // Also extract individual words that look like chemical names
-      const wordMatches = normalizedText.match(/\b[a-z][a-z0-9-]{2,30}\b/gi) || [];
-      for (const word of wordMatches) {
-        const w = word.toLowerCase();
-        const skipWords = ['ingredients', 'contains', 'and', 'the', 'for', 'with', 'from', 'this', 'that', 'may', 'contain', 'less', 'than', 'more', 'percent', 'water', 'sugar', 'salt'];
-        if (!skipWords.includes(w) && w.length >= 4) {
-          potentialIngredients.add(w);
+        // Clean up the segment - trim and remove extra spaces
+        let cleaned = segment.trim().replace(/\s+/g, ' ');
+        
+        // Skip very short or very long segments
+        if (cleaned.length < 3 || cleaned.length > 60) continue;
+        
+        // Skip common non-ingredient phrases
+        const skipPhrases = ['ingredients', 'contains', 'may contain', 'and', 'or', 'the', 'from', 'with', 'less than', 'more than', 'percent', 'organic', 'natural', 'artificial', 'added', 'for', 'as', 'to', 'see', 'warning', 'caution', 'keep', 'store', 'best before', 'use by'];
+        if (skipPhrases.includes(cleaned.toLowerCase())) continue;
+        
+        // Remove leading numbers/percentages (e.g., "2% sodium benzoate" -> "sodium benzoate")
+        cleaned = cleaned.replace(/^[\d.]+%?\s*/, '');
+        
+        // Add the full ingredient phrase (keeps "sodium cyanide" together)
+        if (cleaned.length >= 3) {
+          potentialIngredients.add(cleaned);
         }
       }
 
