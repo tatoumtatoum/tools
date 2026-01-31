@@ -367,3 +367,114 @@ test.describe('Ingredient Database', () => {
     console.log('Ingredient list:', ingredientList);
   });
 });
+
+test.describe('Sodium Cyanide Detection (TDD)', () => {
+  test('should detect sodium cyanide as DANGER from test image', async ({ page }) => {
+    await page.goto('/ingredient-scanner.html');
+    
+    // Upload the test image containing "Sodium Cyanide"
+    await page.locator('#file-input').setInputFiles('tests/ingredient-scanner_test-1.jpg');
+    
+    // Wait for OCR and API analysis to complete (may take a while)
+    await expect(page.locator('#results-section')).toBeVisible({ timeout: 120000 });
+    
+    // Verify OCR extracted "sodium cyanide" from the image
+    await page.locator('#text-toggle').click();
+    const extractedText = await page.locator('#extracted-text').textContent();
+    console.log('Extracted text:', extractedText);
+    expect(extractedText?.toLowerCase()).toContain('sodium');
+    expect(extractedText?.toLowerCase()).toContain('cyanide');
+    
+    // Verify sodium cyanide is classified as DANGER
+    const dangerousSection = page.locator('#dangerous-section');
+    await expect(dangerousSection).toBeVisible();
+    
+    const dangerousSectionText = await dangerousSection.textContent();
+    console.log('Dangerous section:', dangerousSectionText);
+    
+    // Should find sodium cyanide as dangerous
+    expect(dangerousSectionText?.toLowerCase()).toContain('cyanide');
+    
+    // Should be marked as DANGER level (not warning or caution)
+    const dangerBadges = page.locator('.badge.danger');
+    const dangerCount = await dangerBadges.count();
+    console.log('Danger badges count:', dangerCount);
+    expect(dangerCount).toBeGreaterThan(0);
+    
+    // Verify H-codes are displayed (H300, H310, H330 for sodium cyanide)
+    const ingredientItems = await page.locator('.ingredient-item.danger').allTextContents();
+    console.log('Danger items:', ingredientItems);
+    
+    // At least one danger item should mention H-codes or fatal hazards
+    const hasHCodes = ingredientItems.some(item => 
+      item.includes('H300') || item.includes('H310') || item.includes('H330') || 
+      item.toLowerCase().includes('fatal')
+    );
+    expect(hasHCodes).toBe(true);
+  });
+
+  test('should show correct API sources for sodium cyanide detection', async ({ page }) => {
+    await page.goto('/ingredient-scanner.html');
+    
+    // Upload the test image
+    await page.locator('#file-input').setInputFiles('tests/ingredient-scanner_test-1.jpg');
+    
+    // Wait for results
+    await expect(page.locator('#results-section')).toBeVisible({ timeout: 120000 });
+    
+    // Verify API status section shows PubChem was used
+    const apiStatus = page.locator('#api-status');
+    await expect(apiStatus).toBeVisible();
+    
+    const apiStatusText = await apiStatus.textContent();
+    console.log('API Status:', apiStatusText);
+    
+    // Should show PubChem was checked
+    expect(apiStatusText).toContain('PubChem');
+    
+    // Should show at least 1 chemical with hazards found
+    expect(apiStatusText).toMatch(/\d+ with hazards/);
+  });
+
+  test('should display sodium cyanide in identified ingredients list', async ({ page }) => {
+    await page.goto('/ingredient-scanner.html');
+    
+    // Upload the test image
+    await page.locator('#file-input').setInputFiles('tests/ingredient-scanner_test-1.jpg');
+    
+    // Wait for results
+    await expect(page.locator('#results-section')).toBeVisible({ timeout: 120000 });
+    
+    // Check identified ingredients section
+    const identifiedSection = page.locator('#identified-section');
+    await expect(identifiedSection).toBeVisible();
+    
+    const identifiedText = await identifiedSection.textContent();
+    console.log('Identified section:', identifiedText);
+    
+    // Sodium cyanide should be in the identified list with a warning indicator
+    expect(identifiedText?.toLowerCase()).toContain('cyanide');
+  });
+
+  test('should show summary with at least 1 high risk item', async ({ page }) => {
+    await page.goto('/ingredient-scanner.html');
+    
+    // Upload the test image
+    await page.locator('#file-input').setInputFiles('tests/ingredient-scanner_test-1.jpg');
+    
+    // Wait for results
+    await expect(page.locator('#results-section')).toBeVisible({ timeout: 120000 });
+    
+    // Check summary shows danger count > 0
+    const summary = page.locator('#summary');
+    const summaryText = await summary.textContent();
+    console.log('Summary:', summaryText);
+    
+    // The danger count should be at least 1
+    const dangerCount = page.locator('.summary-item.danger .summary-count');
+    const dangerCountText = await dangerCount.textContent();
+    console.log('Danger count:', dangerCountText);
+    
+    expect(parseInt(dangerCountText || '0')).toBeGreaterThan(0);
+  });
+});
