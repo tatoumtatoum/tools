@@ -758,6 +758,21 @@
     };
 
     /**
+     * Recursively find a section by TOCHeading in PubChem data
+     */
+    function findSection(sections, heading) {
+      if (!sections) return null;
+      for (const section of sections) {
+        if (section.TOCHeading === heading) return section;
+        if (section.Section) {
+          const found = findSection(section.Section, heading);
+          if (found) return found;
+        }
+      }
+      return null;
+    }
+
+    /**
      * Parse GHS hazard information from PubChem response using H-codes
      */
     function parseGHSHazards(data) {
@@ -771,26 +786,53 @@
       };
 
       try {
-        const ghsSection = data.Record.Section.find(s => s.TOCHeading === 'GHS Classification');
-        if (!ghsSection?.Section) return null;
+        // Recursively find GHS Classification section (can be nested)
+        const ghsSection = findSection(data.Record.Section, 'GHS Classification');
+        if (!ghsSection) return null;
 
-        for (const section of ghsSection.Section) {
-          if (section.TOCHeading === 'Pictogram(s)' && section.Information) {
-            for (const info of section.Information) {
-              if (info.Value?.StringWithMarkup) {
-                hazards.pictograms.push(...info.Value.StringWithMarkup.map(s => s.String));
+        // GHS Classification has Information directly (not nested Section)
+        if (ghsSection.Information) {
+          for (const info of ghsSection.Information) {
+            if (info.Value?.StringWithMarkup) {
+              const name = info.Name || '';
+              for (const markup of info.Value.StringWithMarkup) {
+                const str = markup.String || '';
+                
+                // Handle different info types
+                if (name === 'Pictogram(s)') {
+                  hazards.pictograms.push(str);
+                } else if (name === 'GHS Hazard Statements') {
+                  hazards.statements.push(str);
+                  // Extract H-codes from statements (e.g., "H300: Fatal if swallowed")
+                  const hCodeMatch = str.match(/H\d{3}[a-zA-Z+]*/g);
+                  if (hCodeMatch) {
+                    hazards.hCodes.push(...hCodeMatch);
+                  }
+                }
               }
             }
           }
-          if (section.TOCHeading === 'GHS Hazard Statements' && section.Information) {
-            for (const info of section.Information) {
-              if (info.Value?.StringWithMarkup) {
-                for (const stmt of info.Value.StringWithMarkup) {
-                  hazards.statements.push(stmt.String);
-                  // Extract H-codes from statements (e.g., "H300: Fatal if swallowed")
-                  const hCodeMatch = stmt.String.match(/H\d{3}[a-zA-Z]*/g);
-                  if (hCodeMatch) {
-                    hazards.hCodes.push(...hCodeMatch);
+        }
+        
+        // Also check nested Section if present (for alternative structures)
+        if (ghsSection.Section) {
+          for (const section of ghsSection.Section) {
+            if (section.TOCHeading === 'Pictogram(s)' && section.Information) {
+              for (const info of section.Information) {
+                if (info.Value?.StringWithMarkup) {
+                  hazards.pictograms.push(...info.Value.StringWithMarkup.map(s => s.String));
+                }
+              }
+            }
+            if (section.TOCHeading === 'GHS Hazard Statements' && section.Information) {
+              for (const info of section.Information) {
+                if (info.Value?.StringWithMarkup) {
+                  for (const stmt of info.Value.StringWithMarkup) {
+                    hazards.statements.push(stmt.String);
+                    const hCodeMatch = stmt.String.match(/H\d{3}[a-zA-Z+]*/g);
+                    if (hCodeMatch) {
+                      hazards.hCodes.push(...hCodeMatch);
+                    }
                   }
                 }
               }
@@ -994,7 +1036,7 @@
       const potentialIngredients = new Set();
       
       // Split text by commas, semicolons, and common ingredient list separators
-      const segments = normalizedText.split(/[,;:•·\n\r\(\)]+/);
+      const segments = normalizedText.split(/[,;:•·\n\r\(\)\[\]\{\}]+/);
       for (const segment of segments) {
         // Clean up the segment - trim and remove extra spaces
         let cleaned = segment.trim().replace(/\s+/g, ' ');
@@ -1003,7 +1045,7 @@
         if (cleaned.length < 3 || cleaned.length > 60) continue;
         
         // Skip common non-ingredient phrases
-        const skipPhrases = ['ingredients', 'contains', 'may contain', 'and', 'or', 'the', 'from', 'with', 'less than', 'more than', 'percent', 'organic', 'natural', 'artificial', 'added', 'for', 'as', 'to', 'see', 'warning', 'caution', 'keep', 'store', 'best before', 'use by'];
+        const skipPhrases = ['ingredients', 'contains', 'may contain', 'and', 'or', 'the', 'from', 'with', 'less than', 'more than', 'percent', 'organic', 'natural', 'artificial', 'added', 'for', 'as', 'to', 'see', 'warning', 'caution', 'keep', 'store', 'best before', 'use by', 'this is', 'that is', 'which is', 'pubchem', 'cid', 'cas'];
         if (skipPhrases.includes(cleaned.toLowerCase())) continue;
         
         // Remove leading numbers/percentages (e.g., "2% sodium benzoate" -> "sodium benzoate")
@@ -1013,6 +1055,24 @@
         if (cleaned.length >= 3) {
           potentialIngredients.add(cleaned);
         }
+      }
+      
+      // Also extract specific chemical compound patterns (e.g., "sodium cyanide", "potassium chloride")
+      const chemicalPatterns = [
+        /\b(sodium|potassium|calcium|magnesium|iron|zinc|copper|aluminum|ammonium)\s+[a-z]+(?:ide|ate|ite|ine)?\b/gi,
+        /\b[a-z]+(?:aldehyde|oxide|hydroxide|chloride|sulfate|nitrate|carbonate|phosphate|cyanide|fluoride|bromide|iodide)\b/gi,
+        /\b[a-z]+\s+(?:acid|alcohol|ester|ether)\b/gi,
+        /\b(?:methyl|ethyl|propyl|butyl|phenyl|benzyl)[a-z]*\b/gi,
+      ];
+      
+      for (const pattern of chemicalPatterns) {
+        const matches = normalizedText.match(pattern) || [];
+        matches.forEach(m => {
+          const cleaned = m.trim();
+          if (cleaned.length >= 4) {
+            potentialIngredients.add(cleaned);
+          }
+        });
       }
 
       // Check up to 50 ingredients against PubChem
