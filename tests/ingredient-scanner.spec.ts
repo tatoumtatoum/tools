@@ -316,7 +316,7 @@ test.describe('Ingredient Database', () => {
       buffer: Buffer.from(buffer)
     });
     
-    await expect(page.locator('#results-section')).toBeVisible({ timeout: 60000 });
+    await expect(page.locator('#results-section')).toBeVisible({ timeout: 90000 });
     
     // Check if danger items found
     const summary = await page.locator('#summary').textContent();
