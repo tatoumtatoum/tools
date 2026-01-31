@@ -670,7 +670,95 @@
     }
 
     /**
-     * Parse GHS hazard information from PubChem response
+     * GHS H-Code Classification Database
+     * H-codes are standardized hazard codes from the Globally Harmonized System
+     */
+    const GHS_HCODES = {
+      // ============================================
+      // DANGER - Severe health hazards
+      // ============================================
+      danger: [
+        // Acute toxicity - Fatal
+        'H300', // Fatal if swallowed
+        'H301', // Toxic if swallowed
+        'H310', // Fatal in contact with skin
+        'H311', // Toxic in contact with skin
+        'H330', // Fatal if inhaled
+        'H331', // Toxic if inhaled
+        // Carcinogenicity, Mutagenicity, Reproductive
+        'H340', // May cause genetic defects
+        'H350', // May cause cancer
+        'H350i', // May cause cancer by inhalation
+        'H360', // May damage fertility or the unborn child
+        'H360F', // May damage fertility
+        'H360D', // May damage the unborn child
+        'H360FD', // May damage fertility. May damage the unborn child
+        'H360Fd', // May damage fertility. Suspected of damaging the unborn child
+        'H360Df', // May damage the unborn child. Suspected of damaging fertility
+        // Specific target organ toxicity
+        'H370', // Causes damage to organs
+        'H372', // Causes damage to organs through prolonged or repeated exposure
+        // Aspiration hazard
+        'H304', // May be fatal if swallowed and enters airways
+      ],
+      
+      // ============================================
+      // WARNING - Moderate health hazards  
+      // ============================================
+      warning: [
+        // Acute toxicity - Harmful
+        'H302', // Harmful if swallowed
+        'H312', // Harmful in contact with skin
+        'H332', // Harmful if inhaled
+        // Skin/Eye effects
+        'H314', // Causes severe skin burns and eye damage
+        'H315', // Causes skin irritation
+        'H317', // May cause an allergic skin reaction
+        'H318', // Causes serious eye damage
+        'H319', // Causes serious eye irritation
+        // Respiratory
+        'H334', // May cause allergy or asthma symptoms or breathing difficulties if inhaled
+        'H335', // May cause respiratory irritation
+        // Suspected carcinogen/mutagen/reproductive
+        'H341', // Suspected of causing genetic defects
+        'H351', // Suspected of causing cancer
+        'H361', // Suspected of damaging fertility or the unborn child
+        'H361f', // Suspected of damaging fertility
+        'H361d', // Suspected of damaging the unborn child
+        'H361fd', // Suspected of damaging fertility. Suspected of damaging the unborn child
+        // Specific target organ toxicity
+        'H371', // May cause damage to organs
+        'H373', // May cause damage to organs through prolonged or repeated exposure
+        // Corrosive to metals
+        'H290', // May be corrosive to metals
+      ],
+      
+      // ============================================
+      // CAUTION - Mild hazards
+      // ============================================
+      caution: [
+        // Mild acute toxicity
+        'H303', // May be harmful if swallowed
+        'H305', // May be harmful if swallowed and enters airways
+        'H313', // May be harmful in contact with skin
+        'H316', // Causes mild skin irritation
+        'H320', // Causes eye irritation
+        'H333', // May be harmful if inhaled
+        'H336', // May cause drowsiness or dizziness
+        // Environmental (still relevant for cosmetics)
+        'H400', // Very toxic to aquatic life
+        'H401', // Toxic to aquatic life
+        'H402', // Harmful to aquatic life
+        'H410', // Very toxic to aquatic life with long lasting effects
+        'H411', // Toxic to aquatic life with long lasting effects
+        'H412', // Harmful to aquatic life with long lasting effects
+        'H413', // May cause long lasting harmful effects to aquatic life
+        'H420', // Harms public health and the environment
+      ]
+    };
+
+    /**
+     * Parse GHS hazard information from PubChem response using H-codes
      */
     function parseGHSHazards(data) {
       if (!data?.Record?.Section) return null;
@@ -678,7 +766,8 @@
       const hazards = {
         pictograms: [],
         statements: [],
-        level: 'caution'
+        hCodes: [],
+        level: 'info' // default - no significant hazard
       };
 
       try {
@@ -696,20 +785,37 @@
           if (section.TOCHeading === 'GHS Hazard Statements' && section.Information) {
             for (const info of section.Information) {
               if (info.Value?.StringWithMarkup) {
-                hazards.statements.push(...info.Value.StringWithMarkup.map(s => s.String));
+                for (const stmt of info.Value.StringWithMarkup) {
+                  hazards.statements.push(stmt.String);
+                  // Extract H-codes from statements (e.g., "H300: Fatal if swallowed")
+                  const hCodeMatch = stmt.String.match(/H\d{3}[a-zA-Z]*/g);
+                  if (hCodeMatch) {
+                    hazards.hCodes.push(...hCodeMatch);
+                  }
+                }
               }
             }
           }
         }
 
-        // Determine danger level based on hazard statements
-        const statementText = hazards.statements.join(' ').toLowerCase();
-        if (statementText.includes('fatal') || statementText.includes('cancer') || 
-            statementText.includes('genetic defect') || statementText.includes('may cause death')) {
+        // Determine danger level based on H-codes
+        const foundHCodes = hazards.hCodes.map(h => h.toUpperCase());
+        
+        // Check for DANGER level H-codes
+        if (GHS_HCODES.danger.some(code => foundHCodes.some(h => h.startsWith(code.toUpperCase())))) {
           hazards.level = 'danger';
-        } else if (statementText.includes('toxic') || statementText.includes('harmful') ||
-                   statementText.includes('corrosive') || statementText.includes('serious')) {
+        }
+        // Check for WARNING level H-codes
+        else if (GHS_HCODES.warning.some(code => foundHCodes.some(h => h.startsWith(code.toUpperCase())))) {
           hazards.level = 'warning';
+        }
+        // Check for CAUTION level H-codes
+        else if (GHS_HCODES.caution.some(code => foundHCodes.some(h => h.startsWith(code.toUpperCase())))) {
+          hazards.level = 'caution';
+        }
+        // If has any statements but no recognized H-codes, mark as caution
+        else if (hazards.statements.length > 0) {
+          hazards.level = 'caution';
         }
 
         return hazards;
@@ -933,13 +1039,16 @@
             identifiedEntry.level = pubChemData.hazards.level;
             dangerousResults.push({
               name: chemical.charAt(0).toUpperCase() + chemical.slice(1),
-              category: pubChemData.hazards.pictograms.length > 0 
-                ? `GHS: ${pubChemData.hazards.pictograms.join(', ')}` 
-                : 'Chemical Compound',
+              category: pubChemData.hazards.hCodes.length > 0 
+                ? `GHS H-codes: ${pubChemData.hazards.hCodes.join(', ')}` 
+                : (pubChemData.hazards.pictograms.length > 0 
+                  ? `GHS: ${pubChemData.hazards.pictograms.join(', ')}` 
+                  : 'Chemical Compound'),
               level: pubChemData.hazards.level,
-              info: pubChemData.hazards.statements.slice(0, 2).join(' '),
+              info: pubChemData.hazards.statements.slice(0, 3).join(' '),
               source: 'PubChem',
-              cid: pubChemData.cid
+              cid: pubChemData.cid,
+              hCodes: pubChemData.hazards.hCodes
             });
           }
         } catch (e) {
