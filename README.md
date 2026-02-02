@@ -1,75 +1,125 @@
 # 🛠️ Tools Collection
 
-A collection of useful web-based tools for productivity, safety, and image analysis.
+A collection of useful web-based tools for developers, designers, and researchers. All tools run entirely in your browser with no server-side processing required.
 
-## 📋 Tools
+[![Live Demo](https://img.shields.io/badge/demo-live-success)](https://tatoumtatoum.github.io/tools/)
 
-### 1. **Mermaid to PNG Converter**
-Convert Mermaid diagrams to high-quality PNG images with ease.
-- **Features**: Drag-and-drop support, zoom controls, instant preview
-- **URL**: `/tools/mermaid-to-png.html`
-- **Use case**: Create and export diagrams for presentations, documentation, and design files
+## 📚 Available Tools
 
-### 2. **🔬 Ingredient Safety Scanner**
-Scan food and cosmetic labels to identify dangerous chemicals, carcinogens, and harmful additives using OCR technology.
-- **Features**: OCR text recognition, chemical database matching, safety alerts
-- **URL**: `/tools/ingredient-scanner.html`
-- **Use case**: Check product ingredients for potential health risks before purchase
+### 1. Mermaid to PNG Converter
 
-### 3. **Cat Detector**
-Detect if an image contains a cat using TensorFlow.js and MobileNet deep learning model.
-- **Features**: AI-powered cat detection, works with uploaded images
-- **URL**: `/tools/cat-detector.html`
-- **Use case**: Automatically identify cat images in your photo collection
+Convert Mermaid diagrams to high-quality PNG images with an intuitive interface.
 
-## 🚀 Getting Started
+**Features:**
+- 🎨 Real-time diagram preview
+- 📥 Drag-and-drop support for `.mmd` files
+- 🔍 Zoom controls for precise viewing
+- 💾 Export to PNG with customizable quality
+- 📱 Fully responsive design
+- 🌐 Works offline (Progressive Web App)
+
+**Use Cases:**
+- Creating diagram images for documentation
+- Generating flowcharts for presentations
+- Converting Mermaid code to shareable images
+
+**[→ Open Mermaid to PNG Converter](mermaid-to-png.html)**
+
+---
+
+### 2. 🔬 Ingredient Safety Scanner
+
+Scan food and cosmetic product labels to identify dangerous chemicals, carcinogens, and harmful additives.
+
+**Features:**
+- 📸 OCR-powered text extraction from product labels
+- ⚠️ Automatic hazard detection using PubChem API
+- 🧪 GHS (Globally Harmonized System) classification support
+- 🔴 Identifies carcinogens, toxic substances, and dangerous chemicals
+- 📊 Detailed safety information for each ingredient
+- 🌍 Integration with Open Food Facts database
+- 🧪 Comprehensive H-code (hazard code) database
+- 📱 Mobile-friendly interface
+
+**Technologies:**
+- Tesseract.js for OCR
+- PubChem API for chemical safety data
+- Open Food Facts API for product information
+- GHS H-code classification system
+
+**Safety Categories Detected:**
+- ⚠️ DANGER - Severe hazards
+- ⚠️ WARNING - Moderate hazards  
+- ⚠️ CAUTION - Minor hazards
+- ✅ SAFE - No known hazards
+
+**[→ Open Ingredient Safety Scanner](ingredient-scanner.html)**
+
+---
+
+### 3. Cat Detector
+
+Detect whether an image contains a cat using machine learning.
+
+**Features:**
+- 🤖 Deep learning-based cat detection
+- 🖼️ Upload or drag-and-drop images
+- ⚡ Real-time inference using TensorFlow.js
+- 🎯 MobileNet model for accurate detection
+- 📱 Runs entirely in browser (no uploads required)
+
+**Use Cases:**
+- Fun cat detection experiments
+- Learning about machine learning in the browser
+- Quick image classification
+
+**[→ Open Cat Detector](cat-detector.html)**
+
+---
+
+## 🚀 Live Demo
+
+All tools are available at: **[https://tatoumtatoum.github.io/tools/](https://tatoumtatoum.github.io/tools/)**
+
+## 💻 Local Development
 
 ### Prerequisites
+
 - Node.js (v14 or higher)
-- npm (v6 or higher)
+- npm or yarn
 
 ### Installation
 
-1. Clone the repository:
 ```bash
-git clone https://github.com/tataoumtatoum/tools.git
+# Clone the repository
+git clone https://github.com/tatoumtatoum/tools.git
 cd tools
-```
 
-2. Install dependencies:
-```bash
+# Install dependencies
 npm install
-```
 
-### Running Locally
-
-Start the HTTP server:
-```bash
+# Start local server
 npm run serve
 ```
 
 The tools will be available at `http://localhost:3000`
 
-Access individual tools:
-- Mermaid to PNG: `http://localhost:3000/mermaid-to-png.html`
-- Ingredient Scanner: `http://localhost:3000/ingredient-scanner.html`
-- Cat Detector: `http://localhost:3000/cat-detector.html`
-
-## 🧪 Testing
-
-Run end-to-end tests with Playwright:
+### Development Scripts
 
 ```bash
+# Start local development server
+npm run serve
+
 # Run all tests
 npm test
 
-# Run tests with interactive UI
+# Run tests in UI mode
 npm run test:ui
 
-# Run tests in headed mode (see browser)
+# Run tests in headed mode (visible browser)
 npm run test:headed
 
-# Run tests for specific browser
+# Run tests in specific browsers
 npm run test:chrome
 npm run test:firefox
 npm run test:webkit
@@ -81,45 +131,88 @@ npm run test:mobile
 npm run report
 ```
 
-## 📁 Project Structure
+## 🧪 Testing
+
+The project uses Playwright for comprehensive end-to-end testing across multiple browsers:
+
+- **Browsers Tested**: Chromium, Firefox, WebKit, Mobile Chrome, Mobile Safari
+- **Test Coverage**: 
+  - Mermaid to PNG functionality
+  - Ingredient Scanner OCR and API integration
+  - Mobile download scenarios
+  - Cross-browser compatibility
+
+Run tests with:
+```bash
+npm test
+```
+
+## 🏗️ Project Structure
 
 ```
-.
+tools/
 ├── index.html                          # Main landing page
-├── mermaid-to-png.html                 # Mermaid converter tool
-├── ingredient-scanner.html             # Ingredient scanner tool
-├── cat-detector.html                   # Cat detection tool
-├── sw.js                               # Service worker for offline support
-├── manifest.json                       # PWA manifest
-├── playwright.config.ts                # Playwright test configuration
-├── package.json                        # Project dependencies and scripts
-├── tests/                              # End-to-end test suite
+├── mermaid-to-png.html                # Mermaid diagram converter
+├── ingredient-scanner.html            # Ingredient safety scanner
+├── cat-detector.html                  # Cat detection tool
+├── manifest.json                      # PWA manifest
+├── ingredient-scanner-manifest.json   # PWA manifest for scanner
+├── sw.js                             # Service worker
+├── tests/                            # Playwright tests
 │   ├── mermaid-to-png.spec.ts
 │   ├── ingredient-scanner.spec.ts
-│   ├── mobile-download-debug.spec.ts
-│   └── ...
-└── node_modules/                       # Project dependencies
+│   └── mobile-download-debug.spec.ts
+├── package.json                      # Project dependencies
+└── playwright.config.ts              # Playwright configuration
 ```
 
-## 🛠️ Tech Stack
+## 🌐 Deployment
 
-- **Frontend**: HTML5, CSS3, JavaScript/TypeScript
-- **Testing**: Playwright (supports Chromium, Firefox, WebKit, Mobile Chrome, Mobile Safari)
-- **Build**: npm, http-server
-- **ML**: TensorFlow.js, MobileNet (for Cat Detector)
+The tools are deployed using GitHub Pages and are accessible at:
+- **Main URL**: https://tatoumtatoum.github.io/tools/
 
-## 📜 License
+### Deploy Your Own
 
-ISC - See package.json for details
+1. Fork this repository
+2. Enable GitHub Pages in repository settings
+3. Select the `main` branch as the source
+4. Your tools will be available at `https://YOUR_USERNAME.github.io/tools/`
 
-## 🐛 Issues & Feedback
+## 🔒 Privacy & Security
 
-Found a bug or have a suggestion? [Open an issue on GitHub](https://github.com/tataoumtatoum/tools/issues)
+- **No Data Collection**: All tools run entirely in your browser
+- **No Server Processing**: Images and text are processed locally
+- **Offline Capable**: Tools work without an internet connection (after first load)
+- **No External Uploads**: Your data never leaves your device
+
+## 🛠️ Technologies Used
+
+- **Mermaid.js** - Diagram rendering
+- **Tesseract.js** - OCR text extraction
+- **TensorFlow.js** - Machine learning inference
+- **PubChem API** - Chemical safety data
+- **Open Food Facts API** - Product information
+- **Playwright** - End-to-end testing
+- **Progressive Web App (PWA)** - Offline functionality
+
+## 📄 License
+
+ISC License
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please feel free to submit pull requests or open issues for bugs and feature requests.
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
+
+## 📧 Contact
+
+For issues and feature requests, please use the [GitHub Issues](https://github.com/tatoumtatoum/tools/issues) page.
 
 ---
 
-**Happy tool using! 🎉**
+Made with ❤️ for the open-source community
