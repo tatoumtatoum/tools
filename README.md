@@ -77,6 +77,31 @@ Detect whether an image contains a cat using machine learning.
 
 ---
 
+### 4. 📝 Markdown to HTML Converter
+
+Convert Markdown text to HTML with a live preview, auto-generated table of contents, and copyable raw HTML output.
+
+**Features:**
+- ✍️ Live preview as you type
+- 📑 Auto-generated table of contents from headings
+- 📋 Copy raw HTML output to clipboard
+- 📊 GFM support (tables, task lists, strikethrough)
+- 💻 Code block rendering
+- 🔗 Anchor links for headings
+- ⌨️ Tab key support in editor
+
+**Technologies:**
+- marked.js for Markdown parsing
+
+**Use Cases:**
+- Previewing Markdown content before publishing
+- Converting Markdown to HTML for blogs or emails
+- Generating table of contents for documents
+
+**[→ Open Markdown to HTML Converter](markdown-to-html.html)**
+
+---
+
 ## 🚀 Live Demo
 
 All tools are available at: **[https://tatoumtatoum.github.io/tools/](https://tatoumtatoum.github.io/tools/)**
@@ -139,6 +164,7 @@ The project uses Playwright for comprehensive end-to-end testing across multiple
 - **Test Coverage**: 
   - Mermaid to PNG functionality
   - Ingredient Scanner OCR and API integration
+  - Markdown to HTML converter
   - Mobile download scenarios
   - Cross-browser compatibility
 
@@ -155,12 +181,14 @@ tools/
 ├── mermaid-to-png.html                # Mermaid diagram converter
 ├── ingredient-scanner.html            # Ingredient safety scanner
 ├── cat-detector.html                  # Cat detection tool
+├── markdown-to-html.html              # Markdown to HTML converter
 ├── manifest.json                      # PWA manifest
 ├── ingredient-scanner-manifest.json   # PWA manifest for scanner
 ├── sw.js                             # Service worker
 ├── tests/                            # Playwright tests
 │   ├── mermaid-to-png.spec.ts
 │   ├── ingredient-scanner.spec.ts
+│   ├── markdown-to-html.spec.ts
 │   └── mobile-download-debug.spec.ts
 ├── package.json                      # Project dependencies
 └── playwright.config.ts              # Playwright configuration
@@ -187,6 +215,7 @@ The tools are deployed using GitHub Pages and are accessible at:
 
 ## 🛠️ Technologies Used
 
+- **marked.js** - Markdown parsing
 - **Mermaid.js** - Diagram rendering
 - **Tesseract.js** - OCR text extraction
 - **TensorFlow.js** - Machine learning inference
