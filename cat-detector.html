@@ -266,7 +266,7 @@
     // Load COCO-SSD model
     async function loadModel() {
       try {
-        model = await cocoSsd.load({ base: 'lite_mobilenet_v2' });
+        model = await cocoSsd.load({ base: 'mobilenet_v2' });
         status.textContent = '✅ Model loaded! Drop an image or start webcam.';
       } catch (err) {
         status.textContent = '❌ Failed to load model: ' + err.message;
