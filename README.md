@@ -62,11 +62,11 @@ Scan food and cosmetic product labels to identify dangerous chemicals, carcinoge
 Detect whether an image contains a cat using machine learning.
 
 **Features:**
-- 🤖 Deep learning-based cat detection
+- 🤖 Deep learning-based cat detection using Vision Transformer (ViT)
+- 🤗 Powered by Hugging Face Transformers.js (PyTorch model via ONNX)
 - 🖼️ Upload or drag-and-drop images
-- ⚡ Real-time inference using TensorFlow.js
-- 🎯 MobileNet model for accurate detection
-- 📱 Runs entirely in browser (no uploads required)
+- ⚡ Real-time inference in browser
+- 📱 Responsive mobile design
 
 **Use Cases:**
 - Fun cat detection experiments
@@ -165,6 +165,7 @@ The project uses Playwright for comprehensive end-to-end testing across multiple
   - Mermaid to PNG functionality
   - Ingredient Scanner OCR and API integration
   - Markdown to HTML converter
+  - Cat Detector classification and mobile
   - Mobile download scenarios
   - Cross-browser compatibility
 
@@ -218,7 +219,7 @@ The tools are deployed using GitHub Pages and are accessible at:
 - **marked.js** - Markdown parsing
 - **Mermaid.js** - Diagram rendering
 - **Tesseract.js** - OCR text extraction
-- **TensorFlow.js** - Machine learning inference
+- **Transformers.js** - Hugging Face models in browser (ONNX Runtime)
 - **PubChem API** - Chemical safety data
 - **Open Food Facts API** - Product information
 - **Playwright** - End-to-end testing
