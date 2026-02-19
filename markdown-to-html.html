@@ -199,6 +199,20 @@
       pointer-events: none;
     }
     .toast.show { opacity: 1; }
+    /* Mobile responsive */
+    @media (max-width: 768px) {
+      header { padding: 10px 12px; gap: 8px; flex-wrap: wrap; }
+      header h1 { font-size: 16px; }
+      .toolbar button { padding: 8px 12px; font-size: 12px; }
+      .container {
+        grid-template-columns: 1fr;
+        grid-template-rows: 1fr 1fr;
+      }
+      .panel { border-right: none; border-bottom: 1px solid #ddd; }
+      .panel:last-child { border-bottom: none; }
+      .panel-header .tab { padding: 8px 12px; font-size: 13px; }
+      textarea { font-size: 16px; padding: 12px; }
+    }
   </style>
 </head>
 <body>

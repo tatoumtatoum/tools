@@ -243,4 +243,79 @@ test.describe('Markdown to HTML Converter', () => {
       await expect(previewTab).not.toHaveClass(/active/);
     });
   });
+
+  test.describe('Mobile Responsive', () => {
+    test('should stack panels vertically on mobile', async ({ page, isMobile }) => {
+      test.skip(!isMobile, 'Mobile-only test');
+
+      const container = page.locator('.container');
+      const panels = container.locator('.panel');
+
+      // Both panels should be visible
+      await expect(panels.nth(0)).toBeVisible();
+      await expect(panels.nth(1)).toBeVisible();
+
+      // Panels should stack: second panel below first
+      const box0 = await panels.nth(0).boundingBox();
+      const box1 = await panels.nth(1).boundingBox();
+      expect(box1!.y).toBeGreaterThanOrEqual(box0!.y + box0!.height - 1);
+    });
+
+    test('should make panels full width on mobile', async ({ page, isMobile }) => {
+      test.skip(!isMobile, 'Mobile-only test');
+
+      const viewport = page.viewportSize()!;
+      const panel = page.locator('.panel').nth(0);
+      const box = await panel.boundingBox();
+      // Panel should be close to full viewport width
+      expect(box!.width).toBeGreaterThanOrEqual(viewport.width * 0.95);
+    });
+
+    test('should show all toolbar buttons on mobile', async ({ page, isMobile }) => {
+      test.skip(!isMobile, 'Mobile-only test');
+
+      await expect(page.locator('button', { hasText: 'Copy' })).toBeVisible();
+      await expect(page.locator('button', { hasText: 'Clear' })).toBeVisible();
+    });
+
+    test('should make tabs tappable on mobile', async ({ page, isMobile }) => {
+      test.skip(!isMobile, 'Mobile-only test');
+
+      const tabs = page.locator('.panel-header .tab');
+      const count = await tabs.count();
+      for (let i = 0; i < count; i++) {
+        const box = await tabs.nth(i).boundingBox();
+        // Touch targets should be at least 32px tall
+        expect(box!.height).toBeGreaterThanOrEqual(32);
+      }
+    });
+
+    test('should allow switching tabs on mobile', async ({ page, isMobile }) => {
+      test.skip(!isMobile, 'Mobile-only test');
+
+      const editor = page.locator('#editor');
+      await editor.fill('# Hello Mobile');
+
+      // Preview should render
+      await expect(page.locator('#preview h1')).toHaveText('Hello Mobile');
+
+      // Switch to TOC
+      await page.locator('[data-view="toc"]').click();
+      await expect(page.locator('#toc')).toBeVisible();
+      await expect(page.locator('#preview')).not.toBeVisible();
+
+      // Switch to HTML
+      await page.locator('[data-view="html"]').click();
+      await expect(page.locator('#htmlOutput')).toBeVisible();
+    });
+
+    test('editor should be usable on mobile', async ({ page, isMobile }) => {
+      test.skip(!isMobile, 'Mobile-only test');
+
+      const editor = page.locator('#editor');
+      await editor.fill('**mobile test**');
+
+      await expect(page.locator('#preview strong')).toHaveText('mobile test');
+    });
+  });
 });
