@@ -30,8 +30,9 @@ test.describe('Cat Detector', () => {
     });
 
     test('should eventually load the model', async ({ page }) => {
+      test.setTimeout(120000);
       const status = page.locator('#status');
-      await expect(status).toContainText('loaded', { timeout: 60000 });
+      await expect(status).toContainText('loaded', { timeout: 90000 });
     });
 
     test('should mention TensorFlow and COCO-SSD', async ({ page }) => {

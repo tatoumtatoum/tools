@@ -336,7 +336,7 @@
         }
         predictions.style.display = 'block';
 
-        const catDetections = drawBoxesOnCanvas(boxCanvas, detections, imgEl.naturalWidth, imgEl.naturalHeight);
+        const catDetections = drawBoxesOnCanvas(boxCanvas, detections, imgEl.clientWidth, imgEl.clientHeight);
 
         if (catDetections.length > 0) {
           const best = catDetections.reduce((a, b) => a.score > b.score ? a : b);
