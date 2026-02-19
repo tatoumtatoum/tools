@@ -59,13 +59,14 @@ Scan food and cosmetic product labels to identify dangerous chemicals, carcinoge
 
 ### 3. Cat Detector
 
-Detect whether an image contains a cat using machine learning.
+Detect whether an image contains a cat using real-time machine learning, with bounding box highlighting.
 
 **Features:**
-- 🤖 Deep learning-based cat detection using Vision Transformer (ViT)
-- 🤗 Powered by Hugging Face Transformers.js (PyTorch model via ONNX)
+- 🤖 Real-time object detection using TensorFlow.js COCO-SSD (MobileNet v2)
+- 📹 Live webcam detection with FPS counter
 - 🖼️ Upload or drag-and-drop images
-- ⚡ Real-time inference in browser
+- 🟩 Bounding box highlighting on detected cats
+- ⚡ Fast inference (~100-300ms per frame)
 - 📱 Responsive mobile design
 
 **Use Cases:**
@@ -219,7 +220,8 @@ The tools are deployed using GitHub Pages and are accessible at:
 - **marked.js** - Markdown parsing
 - **Mermaid.js** - Diagram rendering
 - **Tesseract.js** - OCR text extraction
-- **Transformers.js** - Hugging Face models in browser (ONNX Runtime)
+- **TensorFlow.js** - Machine learning inference in browser
+- **COCO-SSD** - Real-time object detection model
 - **PubChem API** - Chemical safety data
 - **Open Food Facts API** - Product information
 - **Playwright** - End-to-end testing

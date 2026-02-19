@@ -4,6 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Cat Detector</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js"></script>
   <style>
     * { box-sizing: border-box; }
     body {
@@ -14,6 +16,27 @@
       background: #f5f5f5;
     }
     h1 { text-align: center; color: #333; }
+    .mode-toggle {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      margin: 12px 0;
+    }
+    .mode-toggle button {
+      padding: 8px 20px;
+      border: 2px solid #007bff;
+      background: #fff;
+      color: #007bff;
+      border-radius: 20px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+    .mode-toggle button.active {
+      background: #007bff;
+      color: #fff;
+    }
     .drop-zone {
       border: 3px dashed #ccc;
       border-radius: 12px;
@@ -55,6 +78,50 @@
       pointer-events: none;
       border-radius: 8px;
       z-index: 1;
+    }
+    #webcamSection {
+      display: none;
+      text-align: center;
+      margin-top: 20px;
+    }
+    #webcamWrapper {
+      display: inline-block;
+      position: relative;
+    }
+    #webcamVideo {
+      max-width: 100%;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      display: block;
+      background: #000;
+    }
+    #webcamCanvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      border-radius: 8px;
+      z-index: 1;
+    }
+    #webcamBtn {
+      margin-top: 12px;
+      padding: 10px 24px;
+      background: #28a745;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    #webcamBtn.stop { background: #dc3545; }
+    #fpsCounter {
+      margin-top: 8px;
+      font-size: 13px;
+      color: #666;
+      font-style: italic;
     }
     #result {
       margin-top: 20px;
@@ -107,61 +174,100 @@
       .drop-zone p { font-size: 16px; }
       #result { font-size: 20px; padding: 16px; }
       .prediction .name { font-size: 14px; max-width: 60%; overflow: hidden; text-overflow: ellipsis; }
+      .mode-toggle button { padding: 10px 18px; font-size: 14px; min-height: 40px; }
     }
   </style>
 </head>
 <body>
   <h1>🐱 Cat Detector</h1>
-  <div id="status">Loading Hugging Face model…</div>
-  <div class="badge">Powered by 🤗 Transformers.js · DETR (Object Detection Transformer)</div>
-  
+  <div id="status">Loading model…</div>
+  <div class="badge">Powered by TensorFlow.js · COCO-SSD (Real-time Object Detection)</div>
+
+  <div class="mode-toggle">
+    <button id="modeImage" class="active">📷 Image</button>
+    <button id="modeWebcam">📹 Webcam</button>
+  </div>
+
   <div class="drop-zone" id="dropZone">
     <p>Drag & drop an image here</p>
     <small>or click to select a file</small>
     <input type="file" id="fileInput" accept="image/*">
   </div>
-  
+
   <div id="preview">
     <div id="imageWrapper">
-      <img id="imagePreview" crossorigin="anonymous">
+      <img id="imagePreview">
       <canvas id="boxCanvas"></canvas>
     </div>
   </div>
-  
+
+  <div id="webcamSection">
+    <div id="webcamWrapper">
+      <video id="webcamVideo" autoplay playsinline muted width="480" height="360"></video>
+      <canvas id="webcamCanvas"></canvas>
+    </div>
+    <br>
+    <button id="webcamBtn">▶ Start Webcam</button>
+    <div id="fpsCounter">FPS: --</div>
+  </div>
+
   <div id="result"></div>
-  
+
   <div id="predictions">
     <h3>Top Predictions:</h3>
     <div id="predictionList"></div>
   </div>
 
-  <script type="module">
-    import { pipeline } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2';
-
+  <script>
     const CAT_LABELS = ['cat'];
 
-    let detector = null;
+    let model = null;
+    let webcamStream = null;
+    let detecting = false;
+    let animFrameId = null;
+
     const dropZone = document.getElementById('dropZone');
     const fileInput = document.getElementById('fileInput');
     const preview = document.getElementById('preview');
     const imagePreview = document.getElementById('imagePreview');
     const boxCanvas = document.getElementById('boxCanvas');
-    const result = document.getElementById('result');
+    const resultEl = document.getElementById('result');
     const predictions = document.getElementById('predictions');
     const predictionList = document.getElementById('predictionList');
     const status = document.getElementById('status');
+    const modeImage = document.getElementById('modeImage');
+    const modeWebcam = document.getElementById('modeWebcam');
+    const webcamSection = document.getElementById('webcamSection');
+    const webcamVideo = document.getElementById('webcamVideo');
+    const webcamCanvas = document.getElementById('webcamCanvas');
+    const webcamBtn = document.getElementById('webcamBtn');
+    const fpsCounter = document.getElementById('fpsCounter');
 
+    // Mode toggle
+    modeImage.addEventListener('click', () => {
+      modeImage.classList.add('active');
+      modeWebcam.classList.remove('active');
+      dropZone.style.display = '';
+      preview.style.display = preview.dataset.shown === 'true' ? 'block' : 'none';
+      webcamSection.style.display = 'none';
+      stopWebcam();
+    });
+
+    modeWebcam.addEventListener('click', () => {
+      modeWebcam.classList.add('active');
+      modeImage.classList.remove('active');
+      dropZone.style.display = 'none';
+      preview.style.display = 'none';
+      webcamSection.style.display = 'block';
+      resultEl.style.display = 'none';
+      predictions.style.display = 'none';
+    });
+
+    // Load COCO-SSD model
     async function loadModel() {
       try {
-        detector = await pipeline('object-detection', 'Xenova/detr-resnet-50', {
-          progress_callback: (progress) => {
-            if (progress.status === 'downloading') {
-              const pct = progress.progress ? Math.round(progress.progress) : 0;
-              status.textContent = `Downloading model… ${pct}%`;
-            }
-          }
-        });
-        status.textContent = '✅ Model loaded! Drop an image to analyze.';
+        model = await cocoSsd.load({ base: 'lite_mobilenet_v2' });
+        status.textContent = '✅ Model loaded! Drop an image or start webcam.';
       } catch (err) {
         status.textContent = '❌ Failed to load model: ' + err.message;
       }
@@ -171,61 +277,57 @@
       return CAT_LABELS.includes(label.toLowerCase());
     }
 
-    function drawBoxes(detections, img) {
-      const ctx = boxCanvas.getContext('2d');
-      const displayW = img.clientWidth;
-      const displayH = img.clientHeight;
-      // Set canvas bitmap resolution to match displayed image
-      boxCanvas.width = displayW;
-      boxCanvas.height = displayH;
+    function drawBoxesOnCanvas(canvas, detections, sourceW, sourceH) {
+      const ctx = canvas.getContext('2d');
+      const displayW = canvas.clientWidth;
+      const displayH = canvas.clientHeight;
+      canvas.width = displayW;
+      canvas.height = displayH;
 
-      const scaleX = displayW / img.naturalWidth;
-      const scaleY = displayH / img.naturalHeight;
+      const scaleX = displayW / sourceW;
+      const scaleY = displayH / sourceH;
 
       ctx.clearRect(0, 0, displayW, displayH);
 
-      const catDetections = detections.filter(d => isCat(d.label));
+      const catDetections = detections.filter(d => isCat(d.class));
       for (const det of catDetections) {
-        const { xmin, ymin, xmax, ymax } = det.box;
-        const x = xmin * scaleX;
-        const y = ymin * scaleY;
-        const w = (xmax - xmin) * scaleX;
-        const h = (ymax - ymin) * scaleY;
+        const [bx, by, bw, bh] = det.bbox;
+        const x = bx * scaleX;
+        const y = by * scaleY;
+        const w = bw * scaleX;
+        const h = bh * scaleY;
 
-        // Draw box
         ctx.strokeStyle = '#00ff88';
         ctx.lineWidth = 3;
         ctx.strokeRect(x, y, w, h);
 
-        // Draw label background
-        const label = `🐱 ${det.label} ${(det.score * 100).toFixed(1)}%`;
+        const label = `🐱 ${det.class} ${(det.score * 100).toFixed(1)}%`;
         ctx.font = 'bold 14px sans-serif';
         const textW = ctx.measureText(label).width;
         ctx.fillStyle = 'rgba(0, 255, 136, 0.85)';
         ctx.fillRect(x, y - 22, textW + 8, 22);
-
-        // Draw label text
         ctx.fillStyle = '#000';
         ctx.fillText(label, x + 4, y - 6);
       }
+      return catDetections;
     }
 
-    async function classifyImage(imgSrc) {
-      result.style.display = 'block';
-      result.className = 'loading';
-      result.textContent = '🔍 Analyzing…';
+    // Image mode detection
+    async function classifyImage(imgEl) {
+      resultEl.style.display = 'block';
+      resultEl.className = 'loading';
+      resultEl.textContent = '🔍 Analyzing…';
       predictions.style.display = 'none';
       boxCanvas.getContext('2d').clearRect(0, 0, boxCanvas.width, boxCanvas.height);
 
       try {
-        const detections = await detector(imgSrc, { threshold: 0.5, percentage: false });
+        const detections = await model.detect(imgEl);
 
-        // Show top detections
         const topDetections = detections.slice(0, 5);
         if (topDetections.length > 0) {
           predictionList.innerHTML = topDetections.map(d => `
             <div class="prediction">
-              <span class="name">${d.label}</span>
+              <span class="name">${d.class}</span>
               <span class="confidence">${(d.score * 100).toFixed(1)}%</span>
             </div>
           `).join('');
@@ -234,24 +336,103 @@
         }
         predictions.style.display = 'block';
 
-        // Draw bounding boxes and determine result
-        const catDetections = detections.filter(d => isCat(d.label));
-        drawBoxes(detections, imagePreview);
+        const catDetections = drawBoxesOnCanvas(boxCanvas, detections, imgEl.naturalWidth, imgEl.naturalHeight);
 
         if (catDetections.length > 0) {
           const best = catDetections.reduce((a, b) => a.score > b.score ? a : b);
-          result.className = 'cat';
-          result.textContent = `✅ Cat found! (${(best.score * 100).toFixed(1)}%)`;
+          resultEl.className = 'cat';
+          resultEl.textContent = `✅ Cat found! (${(best.score * 100).toFixed(1)}%)`;
         } else {
-          result.className = 'not-cat';
-          result.textContent = '❌ No cat detected';
+          resultEl.className = 'not-cat';
+          resultEl.textContent = '❌ No cat detected';
         }
       } catch (err) {
-        result.className = 'not-cat';
-        result.textContent = '❌ Error: ' + err.message;
+        resultEl.className = 'not-cat';
+        resultEl.textContent = '❌ Error: ' + err.message;
       }
     }
 
+    // Webcam mode
+    async function startWebcam() {
+      try {
+        webcamStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'environment', width: { ideal: 640 }, height: { ideal: 480 } }
+        });
+        webcamVideo.srcObject = webcamStream;
+        await webcamVideo.play();
+        webcamBtn.textContent = '⏹ Stop Webcam';
+        webcamBtn.classList.add('stop');
+        detecting = true;
+        detectLoop();
+      } catch (err) {
+        status.textContent = '❌ Webcam error: ' + err.message;
+      }
+    }
+
+    function stopWebcam() {
+      detecting = false;
+      if (animFrameId) {
+        cancelAnimationFrame(animFrameId);
+        animFrameId = null;
+      }
+      if (webcamStream) {
+        webcamStream.getTracks().forEach(t => t.stop());
+        webcamStream = null;
+      }
+      webcamVideo.srcObject = null;
+      webcamBtn.textContent = '▶ Start Webcam';
+      webcamBtn.classList.remove('stop');
+      fpsCounter.textContent = 'FPS: --';
+      const ctx = webcamCanvas.getContext('2d');
+      ctx.clearRect(0, 0, webcamCanvas.width, webcamCanvas.height);
+    }
+
+    let lastFrameTime = 0;
+    async function detectLoop() {
+      if (!detecting || !model) return;
+
+      const now = performance.now();
+      try {
+        const detections = await model.detect(webcamVideo);
+        const catDets = drawBoxesOnCanvas(webcamCanvas, detections, webcamVideo.videoWidth, webcamVideo.videoHeight);
+
+        // Update result
+        if (catDets.length > 0) {
+          const best = catDets.reduce((a, b) => a.score > b.score ? a : b);
+          resultEl.style.display = 'block';
+          resultEl.className = 'cat';
+          resultEl.textContent = `✅ Cat found! (${(best.score * 100).toFixed(1)}%)`;
+        } else {
+          resultEl.style.display = 'block';
+          resultEl.className = 'not-cat';
+          resultEl.textContent = '❌ No cat detected';
+        }
+      } catch (err) {
+        // skip frame errors
+      }
+
+      const elapsed = performance.now() - now;
+      if (lastFrameTime > 0) {
+        const fps = Math.round(1000 / (performance.now() - lastFrameTime));
+        fpsCounter.textContent = `FPS: ${fps} · ${Math.round(elapsed)}ms/frame`;
+      }
+      lastFrameTime = performance.now();
+
+      if (detecting) {
+        animFrameId = requestAnimationFrame(detectLoop);
+      }
+    }
+
+    webcamBtn.addEventListener('click', () => {
+      if (webcamStream) {
+        stopWebcam();
+        resultEl.style.display = 'none';
+      } else {
+        startWebcam();
+      }
+    });
+
+    // File handling
     function handleFile(file) {
       if (!file || !file.type.startsWith('image/')) {
         alert('Please select an image file');
@@ -263,26 +444,23 @@
         const dataUrl = e.target.result;
         imagePreview.src = dataUrl;
         preview.style.display = 'block';
-        imagePreview.onload = () => classifyImage(dataUrl);
+        preview.dataset.shown = 'true';
+        imagePreview.onload = () => classifyImage(imagePreview);
       };
       reader.readAsDataURL(file);
     }
 
     dropZone.addEventListener('click', () => fileInput.click());
-
     fileInput.addEventListener('change', (e) => {
       if (e.target.files.length) handleFile(e.target.files[0]);
     });
-
     dropZone.addEventListener('dragover', (e) => {
       e.preventDefault();
       dropZone.classList.add('dragover');
     });
-
     dropZone.addEventListener('dragleave', () => {
       dropZone.classList.remove('dragover');
     });
-
     dropZone.addEventListener('drop', (e) => {
       e.preventDefault();
       dropZone.classList.remove('dragover');
