@@ -34,12 +34,22 @@
       margin-top: 20px;
       text-align: center;
       display: none;
+      position: relative;
     }
     #preview img {
       max-width: 100%;
       max-height: 400px;
       border-radius: 8px;
       box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      display: block;
+      margin: 0 auto;
+    }
+    #boxCanvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      pointer-events: none;
+      border-radius: 8px;
     }
     #result {
       margin-top: 20px;
@@ -98,7 +108,7 @@
 <body>
   <h1>🐱 Cat Detector</h1>
   <div id="status">Loading Hugging Face model…</div>
-  <div class="badge">Powered by 🤗 Transformers.js · ViT (Vision Transformer)</div>
+  <div class="badge">Powered by 🤗 Transformers.js · DETR (Object Detection Transformer)</div>
   
   <div class="drop-zone" id="dropZone">
     <p>Drag & drop an image here</p>
@@ -108,6 +118,7 @@
   
   <div id="preview">
     <img id="imagePreview" crossorigin="anonymous">
+    <canvas id="boxCanvas"></canvas>
   </div>
   
   <div id="result"></div>
@@ -120,17 +131,14 @@
   <script type="module">
     import { pipeline } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2';
 
-    const CAT_KEYWORDS = [
-      'cat', 'kitten', 'tabby', 'persian', 'siamese', 'egyptian cat',
-      'tiger cat', 'cougar', 'lynx', 'leopard', 'snow leopard', 'jaguar',
-      'lion', 'tiger', 'cheetah'
-    ];
+    const CAT_LABELS = ['cat'];
 
-    let classifier = null;
+    let detector = null;
     const dropZone = document.getElementById('dropZone');
     const fileInput = document.getElementById('fileInput');
     const preview = document.getElementById('preview');
     const imagePreview = document.getElementById('imagePreview');
+    const boxCanvas = document.getElementById('boxCanvas');
     const result = document.getElementById('result');
     const predictions = document.getElementById('predictions');
     const predictionList = document.getElementById('predictionList');
@@ -138,7 +146,7 @@
 
     async function loadModel() {
       try {
-        classifier = await pipeline('image-classification', 'Xenova/vit-base-patch16-224', {
+        detector = await pipeline('object-detection', 'Xenova/detr-resnet-50', {
           progress_callback: (progress) => {
             if (progress.status === 'downloading') {
               const pct = progress.progress ? Math.round(progress.progress) : 0;
@@ -153,8 +161,50 @@
     }
 
     function isCat(label) {
-      const lower = label.toLowerCase();
-      return CAT_KEYWORDS.some(kw => lower.includes(kw));
+      return CAT_LABELS.includes(label.toLowerCase());
+    }
+
+    function drawBoxes(detections, img) {
+      const ctx = boxCanvas.getContext('2d');
+      const displayW = img.clientWidth;
+      const displayH = img.clientHeight;
+      boxCanvas.width = displayW;
+      boxCanvas.height = displayH;
+      // Align canvas over the image
+      const imgRect = img.getBoundingClientRect();
+      const previewRect = preview.getBoundingClientRect();
+      boxCanvas.style.left = (imgRect.left - previewRect.left) + 'px';
+      boxCanvas.style.top = (imgRect.top - previewRect.top) + 'px';
+
+      const scaleX = displayW / img.naturalWidth;
+      const scaleY = displayH / img.naturalHeight;
+
+      ctx.clearRect(0, 0, displayW, displayH);
+
+      const catDetections = detections.filter(d => isCat(d.label));
+      for (const det of catDetections) {
+        const { xmin, ymin, xmax, ymax } = det.box;
+        const x = xmin * scaleX;
+        const y = ymin * scaleY;
+        const w = (xmax - xmin) * scaleX;
+        const h = (ymax - ymin) * scaleY;
+
+        // Draw box
+        ctx.strokeStyle = '#00ff88';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(x, y, w, h);
+
+        // Draw label background
+        const label = `🐱 ${det.label} ${(det.score * 100).toFixed(1)}%`;
+        ctx.font = 'bold 14px sans-serif';
+        const textW = ctx.measureText(label).width;
+        ctx.fillStyle = 'rgba(0, 255, 136, 0.85)';
+        ctx.fillRect(x, y - 22, textW + 8, 22);
+
+        // Draw label text
+        ctx.fillStyle = '#000';
+        ctx.fillText(label, x + 4, y - 6);
+      }
     }
 
     async function classifyImage(imgSrc) {
@@ -162,26 +212,36 @@
       result.className = 'loading';
       result.textContent = '🔍 Analyzing…';
       predictions.style.display = 'none';
+      boxCanvas.getContext('2d').clearRect(0, 0, boxCanvas.width, boxCanvas.height);
 
       try {
-        const preds = await classifier(imgSrc, { topk: 5 });
+        const detections = await detector(imgSrc, { threshold: 0.5, percentage: false });
 
-        predictionList.innerHTML = preds.map(p => `
-          <div class="prediction">
-            <span class="name">${p.label}</span>
-            <span class="confidence">${(p.score * 100).toFixed(1)}%</span>
-          </div>
-        `).join('');
+        // Show top detections
+        const topDetections = detections.slice(0, 5);
+        if (topDetections.length > 0) {
+          predictionList.innerHTML = topDetections.map(d => `
+            <div class="prediction">
+              <span class="name">${d.label}</span>
+              <span class="confidence">${(d.score * 100).toFixed(1)}%</span>
+            </div>
+          `).join('');
+        } else {
+          predictionList.innerHTML = '<div class="prediction"><span class="name">No objects detected</span><span class="confidence">—</span></div>';
+        }
         predictions.style.display = 'block';
 
-        const catPrediction = preds.find(p => isCat(p.label));
+        // Draw bounding boxes and determine result
+        const catDetections = detections.filter(d => isCat(d.label));
+        drawBoxes(detections, imagePreview);
 
-        if (catPrediction) {
+        if (catDetections.length > 0) {
+          const best = catDetections.reduce((a, b) => a.score > b.score ? a : b);
           result.className = 'cat';
-          result.textContent = `✅ It's a Cat! (${(catPrediction.score * 100).toFixed(1)}%)`;
+          result.textContent = `✅ Cat found! (${(best.score * 100).toFixed(1)}%)`;
         } else {
           result.className = 'not-cat';
-          result.textContent = '❌ Not a Cat';
+          result.textContent = '❌ No cat detected';
         }
       } catch (err) {
         result.className = 'not-cat';

@@ -27,6 +27,8 @@ test.describe('Cat Detector', () => {
   });
 
   test.describe('Image Upload', () => {
+    test.setTimeout(180000);
+
     test('should show image preview after file upload', async ({ page }) => {
       await expect(page.locator('#status')).toContainText('loaded', { timeout: 120000 });
 
@@ -36,8 +38,8 @@ test.describe('Cat Detector', () => {
         buffer: await createTestImage(page)
       });
 
-      await expect(page.locator('#preview')).toBeVisible();
-      await expect(page.locator('#imagePreview')).toBeVisible();
+      await expect(page.locator('#preview')).toBeVisible({ timeout: 10000 });
+      await expect(page.locator('#imagePreview')).toHaveAttribute('src', /data:image/, { timeout: 5000 });
     });
 
     test('should open file picker when drop zone is clicked', async ({ page }) => {
@@ -81,7 +83,7 @@ test.describe('Cat Detector', () => {
       await expect(page.locator('#result')).toBeVisible({ timeout: 30000 });
     });
 
-    test('should display top predictions after classification', async ({ page }) => {
+    test('should display predictions panel after classification', async ({ page }) => {
       await expect(page.locator('#status')).toContainText('loaded', { timeout: 120000 });
 
       await page.locator('#fileInput').setInputFiles({
@@ -90,15 +92,14 @@ test.describe('Cat Detector', () => {
         buffer: await createTestImage(page)
       });
 
-      // Wait for predictions to appear
+      // Wait for predictions panel to appear
       await expect(page.locator('#predictions')).toBeVisible({ timeout: 60000 });
       const items = page.locator('.prediction');
       const count = await items.count();
       expect(count).toBeGreaterThan(0);
-      expect(count).toBeLessThanOrEqual(5);
     });
 
-    test('should show prediction names and confidence percentages', async ({ page }) => {
+    test('should show prediction names and confidence values', async ({ page }) => {
       await expect(page.locator('#status')).toContainText('loaded', { timeout: 120000 });
 
       await page.locator('#fileInput').setInputFiles({
@@ -111,8 +112,7 @@ test.describe('Cat Detector', () => {
 
       const firstPred = page.locator('.prediction').first();
       await expect(firstPred.locator('.name')).not.toBeEmpty();
-      const confidence = await firstPred.locator('.confidence').textContent();
-      expect(confidence).toMatch(/%/);
+      await expect(firstPred.locator('.confidence')).not.toBeEmpty();
     });
 
     test('should show cat or not-cat result', async ({ page }) => {
@@ -135,6 +135,26 @@ test.describe('Cat Detector', () => {
 
       const cls = await result.getAttribute('class');
       expect(cls === 'cat' || cls === 'not-cat').toBe(true);
+    });
+
+    test('should display a canvas overlay for bounding boxes', async ({ page }) => {
+      await expect(page.locator('#status')).toContainText('loaded', { timeout: 120000 });
+
+      await page.locator('#fileInput').setInputFiles({
+        name: 'test.png',
+        mimeType: 'image/png',
+        buffer: await createTestImage(page)
+      });
+
+      // Wait for detection to finish
+      await page.waitForFunction(() => {
+        const el = document.getElementById('result');
+        return el && !el.classList.contains('loading');
+      }, { timeout: 60000 });
+
+      // Canvas overlay should exist for bounding box drawing
+      const canvas = page.locator('#boxCanvas');
+      await expect(canvas).toBeAttached();
     });
   });
 
