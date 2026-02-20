@@ -95,6 +95,7 @@ test.describe('Cabinet Médical', () => {
 
     test('navigation rendez-vous', async ({ page }) => {
       await page.click('#desktop-nav [data-route="appointments"]');
+      await page.waitForSelector('#appointments-table');
       await expect(page.locator('#view-title')).toContainText('Rendez-vous');
     });
   });
@@ -363,6 +364,53 @@ test.describe('Cabinet Médical', () => {
       await page.waitForSelector('#patients-table');
       const countAfter = await page.locator('#patients-table tbody tr').count();
       expect(countAfter).toBe(countBefore);
+    });
+  });
+
+  // ===== RELATIONS ENTRE ENTITÉS =====
+  test.describe('Relations entre entités', () => {
+    test('consultation détail affiche les documents liés', async ({ page }) => {
+      await loginAsDoctor(page);
+      await page.click('#desktop-nav [data-route="consultations"]');
+      await page.waitForSelector('#consultations-table');
+      await page.click('#consultations-table tbody tr:first-child a[data-action="view"]');
+      await page.waitForSelector('#linked-documents');
+      await expect(page.locator('#linked-documents')).toBeVisible();
+      await expect(page.locator('#linked-documents h6:has-text("Ordonnances")')).toBeVisible();
+      await expect(page.locator('#linked-documents h6:has-text("Comptes-rendus")')).toBeVisible();
+      await expect(page.locator('#linked-documents h6:has-text("Feuilles de soin")')).toBeVisible();
+    });
+
+    test('ordonnance détail affiche lien consultation', async ({ page }) => {
+      await loginAsDoctor(page);
+      await page.click('#desktop-nav [data-route="prescriptions"]');
+      await page.waitForSelector('#prescriptions-table');
+      await page.click('#prescriptions-table tbody tr:first-child a[data-action="view"]');
+      await page.waitForSelector('.prescription-detail');
+      await expect(page.locator('text=Consultation :')).toBeVisible();
+    });
+
+    test('liste ordonnances affiche colonne consultation', async ({ page }) => {
+      await loginAsDoctor(page);
+      await page.click('#desktop-nav [data-route="prescriptions"]');
+      await page.waitForSelector('#prescriptions-table');
+      await expect(page.locator('#prescriptions-table th:has-text("Consultation")')).toBeVisible();
+    });
+
+    test('rendez-vous affiche lien consultation pour docteur', async ({ page }) => {
+      await loginAsDoctor(page);
+      await page.click('#desktop-nav [data-route="appointments"]');
+      await page.waitForSelector('#appointments-table');
+      await expect(page.locator('#appointments-table th:has-text("Consultation")')).toBeVisible();
+    });
+
+    test('formulaire ordonnance a un sélecteur de consultation', async ({ page }) => {
+      await loginAsDoctor(page);
+      await page.click('#desktop-nav [data-route="prescriptions"]');
+      await page.waitForSelector('#prescriptions-table');
+      await page.click('a:has-text("Nouvelle ordonnance")');
+      await page.waitForSelector('#prescription-form');
+      await expect(page.locator('#prf-consultationId')).toBeVisible();
     });
   });
 

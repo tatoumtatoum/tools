@@ -149,14 +149,14 @@ const DOCTOR_ROUTES = ['consultations', 'prescriptions', 'reports', 'feuilles'];
 // DATABASE
 // ========================================================================
 const db = new Dexie('CabinetMedicalDB');
-db.version(1).stores({
+db.version(2).stores({
   users: '++id, username',
   patients: '++id, lastName, firstName, numSecu',
   appointments: '++id, patientId, doctorId, date, status',
-  consultations: '++id, patientId, doctorId, date',
+  consultations: '++id, patientId, doctorId, appointmentId, date',
   prescriptions: '++id, patientId, doctorId, consultationId, date',
-  medicalReports: '++id, patientId, doctorId, date',
-  feuillesDeSoin: '++id, patientId, doctorId, date'
+  medicalReports: '++id, patientId, doctorId, consultationId, date',
+  feuillesDeSoin: '++id, patientId, doctorId, consultationId, date'
 });
 
 // ========================================================================
@@ -395,6 +395,23 @@ function statusBadge(status) {
   return `<span class="badge bg-${colors[status] || 'dark'}">${status}</span>`;
 }
 
+function consultationLink(consultationId) {
+  if (!consultationId) return '<span class="text-muted small">—</span>';
+  return `<a href="#/consultations/${consultationId}" class="badge bg-light text-primary text-decoration-none" title="Voir la consultation"><i class="bi bi-clipboard2-pulse"></i> Consultation #${consultationId}</a>`;
+}
+
+async function getConsultationOptions(selectedId, patientId) {
+  let consults;
+  if (patientId) consults = await db.consultations.where('patientId').equals(patientId).reverse().sortBy('date');
+  else consults = await db.consultations.reverse().sortBy('date');
+  const items = [];
+  for (const c of consults) {
+    const pName = await getPatientName(c.patientId);
+    items.push(`<option value="${c.id}" ${c.id === selectedId ? 'selected' : ''}>${fmtDate(c.date)} — ${pName} — ${c.motif}</option>`);
+  }
+  return items.join('');
+}
+
 function confirmAction(message, callback) {
   document.getElementById('confirmModalBody').textContent = message;
   const modal = new bootstrap.Modal(document.getElementById('confirmModal'));
@@ -624,7 +641,11 @@ async function viewPatientDetail(mc, id) {
 // ========================================================================
 async function viewAppointments(mc) {
   const allAppts = await db.appointments.reverse().sortBy('date');
-  for (const a of allAppts) { a._patientName = await getPatientName(a.patientId); }
+  for (const a of allAppts) {
+    a._patientName = await getPatientName(a.patientId);
+    const linkedConsult = await db.consultations.where('appointmentId').equals(a.id).first();
+    a._consultationId = linkedConsult ? linkedConsult.id : null;
+  }
 
   mc.innerHTML = viewHeader('Rendez-vous', `<a href="#/appointments/new" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg"></i> Nouveau RDV</a>`) + `
     <div class="card"><div class="card-body">
@@ -635,12 +656,15 @@ async function viewAppointments(mc) {
         </select></div>
       </div>
       <div class="table-responsive"><table class="table table-hover" id="appointments-table"><thead><tr>
-        <th>Date</th><th>Heure</th><th>Patient</th><th class="d-none d-md-table-cell">Type</th><th>Statut</th><th>Actions</th>
+        <th>Date</th><th>Heure</th><th>Patient</th><th class="d-none d-md-table-cell">Type</th><th>Statut</th>${isDoctor() ? '<th class="d-none d-md-table-cell">Consultation</th>' : ''}<th>Actions</th>
       </tr></thead><tbody>
         ${allAppts.map(a => `<tr data-date="${a.date}">
           <td>${fmtDate(a.date)}</td><td>${a.startTime}-${a.endTime}</td>
           <td><a href="#/patients/${a.patientId}">${a._patientName}</a></td>
           <td class="d-none d-md-table-cell">${a.type}</td><td>${statusBadge(a.status)}</td>
+          ${isDoctor() ? `<td class="d-none d-md-table-cell">${a._consultationId
+            ? `<a href="#/consultations/${a._consultationId}" class="badge bg-success text-decoration-none"><i class="bi bi-check-circle"></i> #${a._consultationId}</a>`
+            : `<a href="#/consultations/new?patientId=${a.patientId}&appointmentId=${a.id}" class="badge bg-outline-primary border text-primary text-decoration-none"><i class="bi bi-plus-circle"></i> Créer</a>`}</td>` : ''}
           <td>
             <a href="#/appointments/${a.id}/edit" class="btn btn-sm btn-outline-warning"><i class="bi bi-pencil"></i></a>
             <button onclick="deleteAppointment(${a.id})" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
@@ -755,6 +779,7 @@ async function viewConsultationForm(mc, id, query) {
   const title = id ? 'Modifier la consultation' : 'Nouvelle consultation';
   const opts = await patientOptions(c.patientId || parseInt(query?.patientId) || null);
   const vs = c.vitalSigns ? JSON.parse(c.vitalSigns) : {};
+  const appointmentId = c.appointmentId || parseInt(query?.appointmentId) || null;
 
   mc.innerHTML = viewHeader(title, `<a href="#/consultations" class="btn btn-outline-secondary btn-sm">Retour</a>`) + `
     <div class="card"><div class="card-body"><form id="consultation-form">
@@ -797,6 +822,7 @@ async function viewConsultationForm(mc, id, query) {
     const data = {
       patientId: parseInt(document.getElementById('cf-patientId').value),
       doctorId: currentUser.id, date: document.getElementById('cf-date').value,
+      appointmentId: appointmentId,
       motif: document.getElementById('cf-motif').value,
       symptoms: document.getElementById('cf-symptoms').value,
       examenClinique: document.getElementById('cf-examenClinique').value,
@@ -822,6 +848,12 @@ async function viewConsultationDetail(mc, id) {
   const patientName = await getPatientName(c.patientId);
   const vs = c.vitalSigns ? JSON.parse(c.vitalSigns) : {};
 
+  // Fetch linked documents
+  const linkedPrescs = await db.prescriptions.where('consultationId').equals(id).toArray();
+  const linkedReports = await db.medicalReports.where('consultationId').equals(id).toArray();
+  const linkedFeuilles = await db.feuillesDeSoin.where('consultationId').equals(id).toArray();
+  const linkedAppt = c.appointmentId ? await db.appointments.get(c.appointmentId) : null;
+
   mc.innerHTML = viewHeader('Détail consultation', `
     <a href="#/prescriptions/new?patientId=${c.patientId}&consultationId=${c.id}" class="btn btn-sm btn-outline-success me-1"><i class="bi bi-file-earmark-medical"></i> Ordonnance</a>
     <a href="#/reports/new?patientId=${c.patientId}&consultationId=${c.id}" class="btn btn-sm btn-outline-info me-1"><i class="bi bi-journal-medical"></i> Compte-rendu</a>
@@ -831,6 +863,7 @@ async function viewConsultationDetail(mc, id) {
       <div class="row g-3">
         <div class="col-md-6"><strong>Patient :</strong> <a href="#/patients/${c.patientId}">${patientName}</a></div>
         <div class="col-md-6"><strong>Date :</strong> ${fmtDate(c.date)}</div>
+        ${linkedAppt ? `<div class="col-12"><strong>Rendez-vous :</strong> ${fmtDate(linkedAppt.date)} ${linkedAppt.startTime}-${linkedAppt.endTime} (${linkedAppt.type})</div>` : ''}
         <div class="col-12"><strong>Motif :</strong> ${c.motif}</div>
         <div class="col-12"><strong>Symptômes :</strong> ${c.symptoms || '—'}</div>
         <div class="col-12"><strong>Examen clinique :</strong> ${c.examenClinique || '—'}</div>
@@ -845,7 +878,36 @@ async function viewConsultationDetail(mc, id) {
         <div class="col"><span class="badge bg-light text-dark p-2">Poids: ${vs.poids || '—'} kg</span></div>
         <div class="col"><span class="badge bg-light text-dark p-2">Taille: ${vs.taille || '—'} cm</span></div>
       </div>
-    </div></div>`;
+    </div></div>
+
+    <div class="card mt-3" id="linked-documents"><div class="card-header"><h6 class="mb-0"><i class="bi bi-link-45deg"></i> Documents liés à cette consultation</h6></div>
+      <div class="card-body">
+        <h6 class="text-success"><i class="bi bi-file-earmark-medical"></i> Ordonnances (${linkedPrescs.length})</h6>
+        ${linkedPrescs.length > 0 ? `<ul class="list-group list-group-flush mb-3">${linkedPrescs.map(p => {
+          const meds = JSON.parse(p.medications || '[]');
+          return `<li class="list-group-item d-flex justify-content-between align-items-center">
+            <span>${fmtDate(p.date)} — ${meds.map(m=>m.name).join(', ')} ${statusBadge(p.status)}</span>
+            <a href="#/prescriptions/${p.id}" class="btn btn-sm btn-outline-primary"><i class="bi bi-eye"></i></a>
+          </li>`;
+        }).join('')}</ul>` : '<p class="text-muted small mb-3">Aucune ordonnance liée</p>'}
+
+        <h6 class="text-info"><i class="bi bi-journal-medical"></i> Comptes-rendus (${linkedReports.length})</h6>
+        ${linkedReports.length > 0 ? `<ul class="list-group list-group-flush mb-3">${linkedReports.map(r =>
+          `<li class="list-group-item d-flex justify-content-between align-items-center">
+            <span>${fmtDate(r.date)} — ${r.title} ${statusBadge(r.status)}</span>
+            <a href="#/reports/${r.id}" class="btn btn-sm btn-outline-primary"><i class="bi bi-eye"></i></a>
+          </li>`
+        ).join('')}</ul>` : '<p class="text-muted small mb-3">Aucun compte-rendu lié</p>'}
+
+        <h6 class="text-warning"><i class="bi bi-receipt"></i> Feuilles de soin (${linkedFeuilles.length})</h6>
+        ${linkedFeuilles.length > 0 ? `<ul class="list-group list-group-flush">${linkedFeuilles.map(f =>
+          `<li class="list-group-item d-flex justify-content-between align-items-center">
+            <span>${fmtDate(f.date)} — ${fmtMoney(f.totalAmount)} ${statusBadge(f.status)}</span>
+            <a href="#/feuilles/${f.id}" class="btn btn-sm btn-outline-primary"><i class="bi bi-eye"></i></a>
+          </li>`
+        ).join('')}</ul>` : '<p class="text-muted small">Aucune feuille de soin liée</p>'}
+      </div>
+    </div>`;
 }
 
 // ========================================================================
@@ -861,11 +923,12 @@ async function viewPrescriptions(mc) {
   mc.innerHTML = viewHeader('Ordonnances', `<a href="#/prescriptions/new" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg"></i> Nouvelle ordonnance</a>`) + `
     <div class="card"><div class="card-body"><div class="table-responsive">
       <table class="table table-hover" id="prescriptions-table"><thead><tr>
-        <th>Date</th><th>Patient</th><th>Médicaments</th><th>Statut</th><th>Actions</th>
+        <th>Date</th><th>Patient</th><th class="d-none d-md-table-cell">Consultation</th><th>Médicaments</th><th>Statut</th><th>Actions</th>
       </tr></thead><tbody>
         ${presc.map(p => `<tr>
           <td>${fmtDate(p.date)}</td>
           <td><a href="#/patients/${p.patientId}">${p._patientName}</a></td>
+          <td class="d-none d-md-table-cell">${consultationLink(p.consultationId)}</td>
           <td>${p._meds.map(m => m.name).join(', ')}</td>
           <td>${statusBadge(p.status)}</td>
           <td>
@@ -887,14 +950,19 @@ function deletePrescription(id) {
 async function viewPrescriptionForm(mc, id, query) {
   const p = id ? await db.prescriptions.get(id) : {};
   const title = id ? 'Modifier l\'ordonnance' : 'Nouvelle ordonnance';
-  const opts = await patientOptions(p.patientId || parseInt(query?.patientId) || null);
+  const selectedPatientId = p.patientId || parseInt(query?.patientId) || null;
+  const opts = await patientOptions(selectedPatientId);
   const meds = p.medications ? JSON.parse(p.medications) : [];
+  const selectedConsultId = p.consultationId || parseInt(query?.consultationId) || null;
+  const consultOpts = await getConsultationOptions(selectedConsultId, selectedPatientId);
 
   mc.innerHTML = viewHeader(title, `<a href="#/prescriptions" class="btn btn-outline-secondary btn-sm">Retour</a>`) + `
     <div class="card"><div class="card-body"><form id="prescription-form">
       <div class="row g-3">
         <div class="col-md-6"><label class="form-label">Patient *</label>
           <select class="form-select" id="prf-patientId" required><option value="">Sélectionner...</option>${opts}</select></div>
+        <div class="col-md-6"><label class="form-label">Consultation associée</label>
+          <select class="form-select" id="prf-consultationId"><option value="">Aucune</option>${consultOpts}</select></div>
         <div class="col-md-6"><label class="form-label">Date</label>
           <input type="date" class="form-control" id="prf-date" value="${p.date || dayjs().format('YYYY-MM-DD')}"></div>
         <div class="col-md-6"><label class="form-label">Statut</label>
@@ -921,7 +989,7 @@ async function viewPrescriptionForm(mc, id, query) {
     const medications = collectMedications();
     const data = {
       patientId: parseInt(document.getElementById('prf-patientId').value),
-      consultationId: parseInt(query?.consultationId) || p.consultationId || null,
+      consultationId: parseInt(document.getElementById('prf-consultationId').value) || null,
       doctorId: currentUser.id, date: document.getElementById('prf-date').value,
       medications: JSON.stringify(medications),
       notes: document.getElementById('prf-notes').value,
@@ -967,9 +1035,10 @@ async function viewPrescriptionDetail(mc, id) {
     <a href="#/prescriptions" class="btn btn-sm btn-outline-secondary">Retour</a>`) + `
     <div class="card prescription-detail"><div class="card-body">
       <div class="row g-3 mb-3">
-        <div class="col-md-6"><strong>Patient :</strong> <a href="#/patients/${p.patientId}">${patientName}</a></div>
+        <div class="col-md-4"><strong>Patient :</strong> <a href="#/patients/${p.patientId}">${patientName}</a></div>
         <div class="col-md-3"><strong>Date :</strong> ${fmtDate(p.date)}</div>
-        <div class="col-md-3"><strong>Statut :</strong> ${statusBadge(p.status)}</div>
+        <div class="col-md-2"><strong>Statut :</strong> ${statusBadge(p.status)}</div>
+        <div class="col-md-3"><strong>Consultation :</strong> ${consultationLink(p.consultationId)}</div>
       </div>
       <h6>Médicaments prescrits</h6>
       <table class="table table-sm"><thead><tr><th>Médicament</th><th>Posologie</th><th>Fréquence</th><th>Durée</th><th>Instructions</th></tr></thead>
@@ -990,11 +1059,12 @@ async function viewReports(mc) {
   mc.innerHTML = viewHeader('Comptes-rendus', `<a href="#/reports/new" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg"></i> Nouveau compte-rendu</a>`) + `
     <div class="card"><div class="card-body"><div class="table-responsive">
       <table class="table table-hover" id="reports-table"><thead><tr>
-        <th>Date</th><th>Patient</th><th>Type</th><th class="d-none d-md-table-cell">Titre</th><th>Statut</th><th>Actions</th>
+        <th>Date</th><th>Patient</th><th class="d-none d-md-table-cell">Consultation</th><th>Type</th><th class="d-none d-md-table-cell">Titre</th><th>Statut</th><th>Actions</th>
       </tr></thead><tbody>
         ${reports.map(r => `<tr>
           <td>${fmtDate(r.date)}</td>
           <td><a href="#/patients/${r.patientId}">${r._patientName}</a></td>
+          <td class="d-none d-md-table-cell">${consultationLink(r.consultationId)}</td>
           <td>${r.type}</td>
           <td class="d-none d-md-table-cell">${r.title}</td>
           <td>${statusBadge(r.status)}</td>
@@ -1017,13 +1087,18 @@ function deleteReport(id) {
 async function viewReportForm(mc, id, query) {
   const r = id ? await db.medicalReports.get(id) : {};
   const title = id ? 'Modifier le compte-rendu' : 'Nouveau compte-rendu';
-  const opts = await patientOptions(r.patientId || parseInt(query?.patientId) || null);
+  const selectedPatientId = r.patientId || parseInt(query?.patientId) || null;
+  const opts = await patientOptions(selectedPatientId);
+  const selectedConsultId = r.consultationId || parseInt(query?.consultationId) || null;
+  const consultOpts = await getConsultationOptions(selectedConsultId, selectedPatientId);
 
   mc.innerHTML = viewHeader(title, `<a href="#/reports" class="btn btn-outline-secondary btn-sm">Retour</a>`) + `
     <div class="card"><div class="card-body"><form id="report-form">
       <div class="row g-3">
         <div class="col-md-6"><label class="form-label">Patient *</label>
           <select class="form-select" id="rf-patientId" required><option value="">Sélectionner...</option>${opts}</select></div>
+        <div class="col-md-6"><label class="form-label">Consultation associée</label>
+          <select class="form-select" id="rf-consultationId"><option value="">Aucune</option>${consultOpts}</select></div>
         <div class="col-md-3"><label class="form-label">Type *</label>
           <select class="form-select" id="rf-type" required>
             ${['Compte-rendu','Certificat médical','Lettre','Bilan'].map(t => `<option ${r.type===t?'selected':''}>${t}</option>`).join('')}
@@ -1032,9 +1107,9 @@ async function viewReportForm(mc, id, query) {
           <select class="form-select" id="rf-status">
             ${['Brouillon','Finalisé'].map(s => `<option ${r.status===s?'selected':''}>${s}</option>`).join('')}
           </select></div>
-        <div class="col-md-6"><label class="form-label">Date</label>
+        <div class="col-md-3"><label class="form-label">Date</label>
           <input type="date" class="form-control" id="rf-date" value="${r.date || dayjs().format('YYYY-MM-DD')}"></div>
-        <div class="col-md-6"><label class="form-label">Titre *</label>
+        <div class="col-md-3"><label class="form-label">Titre *</label>
           <input type="text" class="form-control" id="rf-title" value="${r.title || ''}" required></div>
         <div class="col-12"><label class="form-label">Contenu *</label>
           <textarea class="form-control" id="rf-content" rows="8" required>${r.content || ''}</textarea></div>
@@ -1046,7 +1121,7 @@ async function viewReportForm(mc, id, query) {
     e.preventDefault();
     const data = {
       patientId: parseInt(document.getElementById('rf-patientId').value),
-      consultationId: parseInt(query?.consultationId) || r.consultationId || null,
+      consultationId: parseInt(document.getElementById('rf-consultationId').value) || null,
       doctorId: currentUser.id, date: document.getElementById('rf-date').value,
       type: document.getElementById('rf-type').value,
       title: document.getElementById('rf-title').value,
@@ -1069,10 +1144,11 @@ async function viewReportDetail(mc, id) {
     <a href="#/reports" class="btn btn-sm btn-outline-secondary">Retour</a>`) + `
     <div class="card report-detail"><div class="card-body">
       <div class="row g-3 mb-3">
-        <div class="col-md-4"><strong>Patient :</strong> <a href="#/patients/${r.patientId}">${patientName}</a></div>
-        <div class="col-md-3"><strong>Date :</strong> ${fmtDate(r.date)}</div>
-        <div class="col-md-3"><strong>Type :</strong> ${r.type}</div>
+        <div class="col-md-3"><strong>Patient :</strong> <a href="#/patients/${r.patientId}">${patientName}</a></div>
+        <div class="col-md-2"><strong>Date :</strong> ${fmtDate(r.date)}</div>
+        <div class="col-md-2"><strong>Type :</strong> ${r.type}</div>
         <div class="col-md-2"><strong>Statut :</strong> ${statusBadge(r.status)}</div>
+        <div class="col-md-3"><strong>Consultation :</strong> ${consultationLink(r.consultationId)}</div>
       </div>
       <h5>${r.title}</h5>
       <div class="border rounded p-3 bg-light" style="white-space:pre-wrap">${r.content}</div>
@@ -1089,11 +1165,12 @@ async function viewFeuilles(mc) {
   mc.innerHTML = viewHeader('Feuilles de soin', `<a href="#/feuilles/new" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg"></i> Nouvelle feuille</a>`) + `
     <div class="card"><div class="card-body"><div class="table-responsive">
       <table class="table table-hover" id="feuilles-table"><thead><tr>
-        <th>Date</th><th>Patient</th><th>Total</th><th>Tiers payant</th><th>Statut</th><th>Actions</th>
+        <th>Date</th><th>Patient</th><th class="d-none d-md-table-cell">Consultation</th><th>Total</th><th>Tiers payant</th><th>Statut</th><th>Actions</th>
       </tr></thead><tbody>
         ${feuilles.map(f => `<tr>
           <td>${fmtDate(f.date)}</td>
           <td><a href="#/patients/${f.patientId}">${f._patientName}</a></td>
+          <td class="d-none d-md-table-cell">${consultationLink(f.consultationId)}</td>
           <td>${fmtMoney(f.totalAmount)}</td>
           <td>${f.tiersPayant ? '<i class="bi bi-check-circle text-success"></i>' : '<i class="bi bi-x-circle text-muted"></i>'}</td>
           <td>${statusBadge(f.status)}</td>
@@ -1116,14 +1193,19 @@ function deleteFeuille(id) {
 async function viewFeuilleForm(mc, id, query) {
   const f = id ? await db.feuillesDeSoin.get(id) : {};
   const title = id ? 'Modifier la feuille de soin' : 'Nouvelle feuille de soin';
-  const opts = await patientOptions(f.patientId || parseInt(query?.patientId) || null);
+  const selectedPatientId = f.patientId || parseInt(query?.patientId) || null;
+  const opts = await patientOptions(selectedPatientId);
   const acts = f.acts ? JSON.parse(f.acts) : [];
+  const selectedConsultId = f.consultationId || parseInt(query?.consultationId) || null;
+  const consultOpts = await getConsultationOptions(selectedConsultId, selectedPatientId);
 
   mc.innerHTML = viewHeader(title, `<a href="#/feuilles" class="btn btn-outline-secondary btn-sm">Retour</a>`) + `
     <div class="card"><div class="card-body"><form id="feuille-form">
       <div class="row g-3">
         <div class="col-md-6"><label class="form-label">Patient *</label>
           <select class="form-select" id="ff-patientId" required><option value="">Sélectionner...</option>${opts}</select></div>
+        <div class="col-md-6"><label class="form-label">Consultation associée</label>
+          <select class="form-select" id="ff-consultationId"><option value="">Aucune</option>${consultOpts}</select></div>
         <div class="col-md-3"><label class="form-label">Date</label>
           <input type="date" class="form-control" id="ff-date" value="${f.date || dayjs().format('YYYY-MM-DD')}"></div>
         <div class="col-md-3"><label class="form-label">Statut</label>
@@ -1156,7 +1238,7 @@ async function viewFeuilleForm(mc, id, query) {
     const totalAmount = collectedActs.reduce((sum, a) => sum + a.amount, 0);
     const data = {
       patientId: parseInt(document.getElementById('ff-patientId').value),
-      consultationId: parseInt(query?.consultationId) || f.consultationId || null,
+      consultationId: parseInt(document.getElementById('ff-consultationId').value) || null,
       doctorId: currentUser.id, date: document.getElementById('ff-date').value,
       acts: JSON.stringify(collectedActs), totalAmount,
       tiersPayant: document.getElementById('ff-tiersPayant').checked,
@@ -1211,10 +1293,11 @@ async function viewFeuilleDetail(mc, id) {
     <a href="#/feuilles" class="btn btn-sm btn-outline-secondary">Retour</a>`) + `
     <div class="card feuille-detail"><div class="card-body">
       <div class="row g-3 mb-3">
-        <div class="col-md-4"><strong>Patient :</strong> <a href="#/patients/${f.patientId}">${patientName}</a></div>
-        <div class="col-md-3"><strong>Date :</strong> ${fmtDate(f.date)}</div>
-        <div class="col-md-3"><strong>Statut :</strong> ${statusBadge(f.status)}</div>
+        <div class="col-md-3"><strong>Patient :</strong> <a href="#/patients/${f.patientId}">${patientName}</a></div>
+        <div class="col-md-2"><strong>Date :</strong> ${fmtDate(f.date)}</div>
+        <div class="col-md-2"><strong>Statut :</strong> ${statusBadge(f.status)}</div>
         <div class="col-md-2"><strong>Tiers payant :</strong> ${f.tiersPayant ? 'Oui' : 'Non'}</div>
+        <div class="col-md-3"><strong>Consultation :</strong> ${consultationLink(f.consultationId)}</div>
       </div>
       <h6>Actes</h6>
       <table class="table table-sm"><thead><tr><th>Code</th><th>Libellé</th><th class="text-end">Montant</th></tr></thead>
