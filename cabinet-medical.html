@@ -40,7 +40,14 @@
     .stat-card .stat-value { font-size: 1.8rem; font-weight: 700; color: #1a73e8; }
     @media (max-width: 767.98px) {
       #sidebar { display: none; }
-      #main-content { margin-left: 0; margin-top: 90px; }
+      #main-content { margin-left: 0; margin-top: 90px; padding: .75rem; }
+      .view-header { flex-direction: column; gap: .5rem; align-items: flex-start !important; }
+      .view-header .d-flex { flex-wrap: wrap; gap: .25rem; }
+      .table th, .table td { font-size: .82rem; padding: .35rem .3rem; white-space: nowrap; }
+      .table .btn-sm { padding: .15rem .3rem; font-size: .75rem; }
+      .table .actions-cell { white-space: nowrap; }
+      .card-body { padding: .75rem; }
+      .row.g-3 > [class*="col-"] { margin-bottom: .25rem; }
     }
   </style>
 </head>
@@ -483,12 +490,12 @@ async function viewPatients(mc) {
       <input type="text" id="patient-search" class="form-control mb-3" placeholder="Rechercher un patient...">
       <div class="table-responsive">
         <table class="table table-hover" id="patients-table"><thead><tr>
-          <th>Nom</th><th>Prénom</th><th>Date de naissance</th><th class="d-none d-md-table-cell">Téléphone</th><th>Actions</th>
+          <th>Nom</th><th>Prénom</th><th class="d-none d-sm-table-cell">Date de naissance</th><th class="d-none d-md-table-cell">Téléphone</th><th>Actions</th>
         </tr></thead><tbody>
           ${patients.map(p => `<tr data-name="${(p.lastName + ' ' + p.firstName).toLowerCase()}">
-            <td>${p.lastName}</td><td>${p.firstName}</td><td>${fmtDate(p.dateOfBirth)}</td>
+            <td>${p.lastName}</td><td>${p.firstName}</td><td class="d-none d-sm-table-cell">${fmtDate(p.dateOfBirth)}</td>
             <td class="d-none d-md-table-cell">${p.phone}</td>
-            <td>
+            <td class="actions-cell">
               <a href="#/patients/${p.id}" data-action="view" class="btn btn-sm btn-outline-primary" title="Voir"><i class="bi bi-eye"></i></a>
               <a href="#/patients/${p.id}/edit" class="btn btn-sm btn-outline-warning" title="Modifier"><i class="bi bi-pencil"></i></a>
               <button onclick="deletePatient(${p.id})" class="btn btn-sm btn-outline-danger" title="Supprimer"><i class="bi bi-trash"></i></button>
@@ -656,16 +663,16 @@ async function viewAppointments(mc) {
         </select></div>
       </div>
       <div class="table-responsive"><table class="table table-hover" id="appointments-table"><thead><tr>
-        <th>Date</th><th>Heure</th><th>Patient</th><th class="d-none d-md-table-cell">Type</th><th>Statut</th>${isDoctor() ? '<th class="d-none d-md-table-cell">Consultation</th>' : ''}<th>Actions</th>
+        <th>Date</th><th class="d-none d-sm-table-cell">Heure</th><th>Patient</th><th class="d-none d-md-table-cell">Type</th><th>Statut</th>${isDoctor() ? '<th class="d-none d-md-table-cell">Consultation</th>' : ''}<th>Actions</th>
       </tr></thead><tbody>
         ${allAppts.map(a => `<tr data-date="${a.date}">
-          <td>${fmtDate(a.date)}</td><td>${a.startTime}-${a.endTime}</td>
+          <td>${fmtDate(a.date)}</td><td class="d-none d-sm-table-cell">${a.startTime}-${a.endTime}</td>
           <td><a href="#/patients/${a.patientId}">${a._patientName}</a></td>
           <td class="d-none d-md-table-cell">${a.type}</td><td>${statusBadge(a.status)}</td>
           ${isDoctor() ? `<td class="d-none d-md-table-cell">${a._consultationId
             ? `<a href="#/consultations/${a._consultationId}" class="badge bg-success text-decoration-none"><i class="bi bi-check-circle"></i> #${a._consultationId}</a>`
             : `<a href="#/consultations/new?patientId=${a.patientId}&appointmentId=${a.id}" class="badge bg-outline-primary border text-primary text-decoration-none"><i class="bi bi-plus-circle"></i> Créer</a>`}</td>` : ''}
-          <td>
+          <td class="actions-cell">
             <a href="#/appointments/${a.id}/edit" class="btn btn-sm btn-outline-warning"><i class="bi bi-pencil"></i></a>
             <button onclick="deleteAppointment(${a.id})" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
           </td></tr>`).join('')}
@@ -751,14 +758,14 @@ async function viewConsultations(mc) {
   mc.innerHTML = viewHeader('Consultations', `<a href="#/consultations/new" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg"></i> Nouvelle consultation</a>`) + `
     <div class="card"><div class="card-body"><div class="table-responsive">
       <table class="table table-hover" id="consultations-table"><thead><tr>
-        <th>Date</th><th>Patient</th><th>Motif</th><th class="d-none d-md-table-cell">Diagnostic</th><th>Actions</th>
+        <th class="d-none d-sm-table-cell">Date</th><th>Patient</th><th>Motif</th><th class="d-none d-md-table-cell">Diagnostic</th><th>Actions</th>
       </tr></thead><tbody>
         ${consults.map(c => `<tr>
-          <td>${fmtDate(c.date)}</td>
+          <td class="d-none d-sm-table-cell">${fmtDate(c.date)}</td>
           <td><a href="#/patients/${c.patientId}">${c._patientName}</a></td>
           <td>${c.motif}</td>
           <td class="d-none d-md-table-cell">${c.diagnostic || '—'}</td>
-          <td>
+          <td class="actions-cell">
             <a href="#/consultations/${c.id}" data-action="view" class="btn btn-sm btn-outline-primary"><i class="bi bi-eye"></i></a>
             <a href="#/consultations/${c.id}/edit" class="btn btn-sm btn-outline-warning"><i class="bi bi-pencil"></i></a>
             <button onclick="deleteConsultation(${c.id})" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
@@ -882,28 +889,49 @@ async function viewConsultationDetail(mc, id) {
 
     <div class="card mt-3" id="linked-documents"><div class="card-header"><h6 class="mb-0"><i class="bi bi-link-45deg"></i> Documents liés à cette consultation</h6></div>
       <div class="card-body">
-        <h6 class="text-success"><i class="bi bi-file-earmark-medical"></i> Ordonnances (${linkedPrescs.length})</h6>
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h6 class="text-success mb-0"><i class="bi bi-file-earmark-medical"></i> Ordonnances (${linkedPrescs.length})</h6>
+          <a href="#/prescriptions/new?patientId=${c.patientId}&consultationId=${c.id}" class="btn btn-sm btn-outline-success"><i class="bi bi-plus"></i> <span class="d-none d-sm-inline">Ajouter</span></a>
+        </div>
         ${linkedPrescs.length > 0 ? `<ul class="list-group list-group-flush mb-3">${linkedPrescs.map(p => {
           const meds = JSON.parse(p.medications || '[]');
-          return `<li class="list-group-item d-flex justify-content-between align-items-center">
-            <span>${fmtDate(p.date)} — ${meds.map(m=>m.name).join(', ')} ${statusBadge(p.status)}</span>
-            <a href="#/prescriptions/${p.id}" class="btn btn-sm btn-outline-primary"><i class="bi bi-eye"></i></a>
+          return `<li class="list-group-item d-flex justify-content-between align-items-center flex-wrap gap-1">
+            <span class="small">${fmtDate(p.date)} — ${meds.map(m=>m.name).join(', ')} ${statusBadge(p.status)}</span>
+            <span class="actions-cell">
+              <a href="#/prescriptions/${p.id}" class="btn btn-sm btn-outline-primary" title="Voir"><i class="bi bi-eye"></i></a>
+              <a href="#/prescriptions/${p.id}/edit" class="btn btn-sm btn-outline-warning" title="Modifier"><i class="bi bi-pencil"></i></a>
+              <button onclick="deletePrescription(${p.id})" class="btn btn-sm btn-outline-danger" title="Supprimer"><i class="bi bi-trash"></i></button>
+            </span>
           </li>`;
         }).join('')}</ul>` : '<p class="text-muted small mb-3">Aucune ordonnance liée</p>'}
 
-        <h6 class="text-info"><i class="bi bi-journal-medical"></i> Comptes-rendus (${linkedReports.length})</h6>
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h6 class="text-info mb-0"><i class="bi bi-journal-medical"></i> Comptes-rendus (${linkedReports.length})</h6>
+          <a href="#/reports/new?patientId=${c.patientId}&consultationId=${c.id}" class="btn btn-sm btn-outline-info"><i class="bi bi-plus"></i> <span class="d-none d-sm-inline">Ajouter</span></a>
+        </div>
         ${linkedReports.length > 0 ? `<ul class="list-group list-group-flush mb-3">${linkedReports.map(r =>
-          `<li class="list-group-item d-flex justify-content-between align-items-center">
-            <span>${fmtDate(r.date)} — ${r.title} ${statusBadge(r.status)}</span>
-            <a href="#/reports/${r.id}" class="btn btn-sm btn-outline-primary"><i class="bi bi-eye"></i></a>
+          `<li class="list-group-item d-flex justify-content-between align-items-center flex-wrap gap-1">
+            <span class="small">${fmtDate(r.date)} — ${r.title} ${statusBadge(r.status)}</span>
+            <span class="actions-cell">
+              <a href="#/reports/${r.id}" class="btn btn-sm btn-outline-primary" title="Voir"><i class="bi bi-eye"></i></a>
+              <a href="#/reports/${r.id}/edit" class="btn btn-sm btn-outline-warning" title="Modifier"><i class="bi bi-pencil"></i></a>
+              <button onclick="deleteReport(${r.id})" class="btn btn-sm btn-outline-danger" title="Supprimer"><i class="bi bi-trash"></i></button>
+            </span>
           </li>`
         ).join('')}</ul>` : '<p class="text-muted small mb-3">Aucun compte-rendu lié</p>'}
 
-        <h6 class="text-warning"><i class="bi bi-receipt"></i> Feuilles de soin (${linkedFeuilles.length})</h6>
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h6 class="text-warning mb-0"><i class="bi bi-receipt"></i> Feuilles de soin (${linkedFeuilles.length})</h6>
+          <a href="#/feuilles/new?patientId=${c.patientId}&consultationId=${c.id}" class="btn btn-sm btn-outline-warning"><i class="bi bi-plus"></i> <span class="d-none d-sm-inline">Ajouter</span></a>
+        </div>
         ${linkedFeuilles.length > 0 ? `<ul class="list-group list-group-flush">${linkedFeuilles.map(f =>
-          `<li class="list-group-item d-flex justify-content-between align-items-center">
-            <span>${fmtDate(f.date)} — ${fmtMoney(f.totalAmount)} ${statusBadge(f.status)}</span>
-            <a href="#/feuilles/${f.id}" class="btn btn-sm btn-outline-primary"><i class="bi bi-eye"></i></a>
+          `<li class="list-group-item d-flex justify-content-between align-items-center flex-wrap gap-1">
+            <span class="small">${fmtDate(f.date)} — ${fmtMoney(f.totalAmount)} ${statusBadge(f.status)}</span>
+            <span class="actions-cell">
+              <a href="#/feuilles/${f.id}" class="btn btn-sm btn-outline-primary" title="Voir"><i class="bi bi-eye"></i></a>
+              <a href="#/feuilles/${f.id}/edit" class="btn btn-sm btn-outline-warning" title="Modifier"><i class="bi bi-pencil"></i></a>
+              <button onclick="deleteFeuille(${f.id})" class="btn btn-sm btn-outline-danger" title="Supprimer"><i class="bi bi-trash"></i></button>
+            </span>
           </li>`
         ).join('')}</ul>` : '<p class="text-muted small">Aucune feuille de soin liée</p>'}
       </div>
@@ -923,15 +951,15 @@ async function viewPrescriptions(mc) {
   mc.innerHTML = viewHeader('Ordonnances', `<a href="#/prescriptions/new" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg"></i> Nouvelle ordonnance</a>`) + `
     <div class="card"><div class="card-body"><div class="table-responsive">
       <table class="table table-hover" id="prescriptions-table"><thead><tr>
-        <th>Date</th><th>Patient</th><th class="d-none d-md-table-cell">Consultation</th><th>Médicaments</th><th>Statut</th><th>Actions</th>
+        <th class="d-none d-sm-table-cell">Date</th><th>Patient</th><th class="d-none d-md-table-cell">Consultation</th><th class="d-none d-sm-table-cell">Médicaments</th><th>Statut</th><th>Actions</th>
       </tr></thead><tbody>
         ${presc.map(p => `<tr>
-          <td>${fmtDate(p.date)}</td>
+          <td class="d-none d-sm-table-cell">${fmtDate(p.date)}</td>
           <td><a href="#/patients/${p.patientId}">${p._patientName}</a></td>
           <td class="d-none d-md-table-cell">${consultationLink(p.consultationId)}</td>
-          <td>${p._meds.map(m => m.name).join(', ')}</td>
+          <td class="d-none d-sm-table-cell">${p._meds.map(m => m.name).join(', ')}</td>
           <td>${statusBadge(p.status)}</td>
-          <td>
+          <td class="actions-cell">
             <a href="#/prescriptions/${p.id}" data-action="view" class="btn btn-sm btn-outline-primary"><i class="bi bi-eye"></i></a>
             <a href="#/prescriptions/${p.id}/edit" class="btn btn-sm btn-outline-warning"><i class="bi bi-pencil"></i></a>
             <button onclick="deletePrescription(${p.id})" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
@@ -1059,16 +1087,16 @@ async function viewReports(mc) {
   mc.innerHTML = viewHeader('Comptes-rendus', `<a href="#/reports/new" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg"></i> Nouveau compte-rendu</a>`) + `
     <div class="card"><div class="card-body"><div class="table-responsive">
       <table class="table table-hover" id="reports-table"><thead><tr>
-        <th>Date</th><th>Patient</th><th class="d-none d-md-table-cell">Consultation</th><th>Type</th><th class="d-none d-md-table-cell">Titre</th><th>Statut</th><th>Actions</th>
+        <th class="d-none d-sm-table-cell">Date</th><th>Patient</th><th class="d-none d-md-table-cell">Consultation</th><th class="d-none d-sm-table-cell">Type</th><th class="d-none d-md-table-cell">Titre</th><th>Statut</th><th>Actions</th>
       </tr></thead><tbody>
         ${reports.map(r => `<tr>
-          <td>${fmtDate(r.date)}</td>
+          <td class="d-none d-sm-table-cell">${fmtDate(r.date)}</td>
           <td><a href="#/patients/${r.patientId}">${r._patientName}</a></td>
           <td class="d-none d-md-table-cell">${consultationLink(r.consultationId)}</td>
-          <td>${r.type}</td>
+          <td class="d-none d-sm-table-cell">${r.type}</td>
           <td class="d-none d-md-table-cell">${r.title}</td>
           <td>${statusBadge(r.status)}</td>
-          <td>
+          <td class="actions-cell">
             <a href="#/reports/${r.id}" data-action="view" class="btn btn-sm btn-outline-primary"><i class="bi bi-eye"></i></a>
             <a href="#/reports/${r.id}/edit" class="btn btn-sm btn-outline-warning"><i class="bi bi-pencil"></i></a>
             <button onclick="deleteReport(${r.id})" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
@@ -1165,16 +1193,16 @@ async function viewFeuilles(mc) {
   mc.innerHTML = viewHeader('Feuilles de soin', `<a href="#/feuilles/new" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg"></i> Nouvelle feuille</a>`) + `
     <div class="card"><div class="card-body"><div class="table-responsive">
       <table class="table table-hover" id="feuilles-table"><thead><tr>
-        <th>Date</th><th>Patient</th><th class="d-none d-md-table-cell">Consultation</th><th>Total</th><th>Tiers payant</th><th>Statut</th><th>Actions</th>
+        <th class="d-none d-sm-table-cell">Date</th><th>Patient</th><th class="d-none d-md-table-cell">Consultation</th><th>Total</th><th class="d-none d-sm-table-cell">Tiers payant</th><th>Statut</th><th>Actions</th>
       </tr></thead><tbody>
         ${feuilles.map(f => `<tr>
-          <td>${fmtDate(f.date)}</td>
+          <td class="d-none d-sm-table-cell">${fmtDate(f.date)}</td>
           <td><a href="#/patients/${f.patientId}">${f._patientName}</a></td>
           <td class="d-none d-md-table-cell">${consultationLink(f.consultationId)}</td>
           <td>${fmtMoney(f.totalAmount)}</td>
-          <td>${f.tiersPayant ? '<i class="bi bi-check-circle text-success"></i>' : '<i class="bi bi-x-circle text-muted"></i>'}</td>
+          <td class="d-none d-sm-table-cell">${f.tiersPayant ? '<i class="bi bi-check-circle text-success"></i>' : '<i class="bi bi-x-circle text-muted"></i>'}</td>
           <td>${statusBadge(f.status)}</td>
-          <td>
+          <td class="actions-cell">
             <a href="#/feuilles/${f.id}" data-action="view" class="btn btn-sm btn-outline-primary"><i class="bi bi-eye"></i></a>
             <a href="#/feuilles/${f.id}/edit" class="btn btn-sm btn-outline-warning"><i class="bi bi-pencil"></i></a>
             <button onclick="deleteFeuille(${f.id})" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
@@ -1391,13 +1419,8 @@ function generateFeuillePDF(feuille, patient) {
 // RESET DATABASE
 // ========================================================================
 window.resetDatabase = async function() {
-  await db.users.clear();
-  await db.patients.clear();
-  await db.appointments.clear();
-  await db.consultations.clear();
-  await db.prescriptions.clear();
-  await db.medicalReports.clear();
-  await db.feuillesDeSoin.clear();
+  await db.delete();
+  await db.open();
   await seedDatabase();
 };
 

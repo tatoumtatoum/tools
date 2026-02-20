@@ -381,6 +381,22 @@ test.describe('Cabinet Médical', () => {
       await expect(page.locator('#linked-documents h6:has-text("Feuilles de soin")')).toBeVisible();
     });
 
+    test('consultation détail permet CRUD sur documents liés', async ({ page }) => {
+      await loginAsDoctor(page);
+      await page.click('#desktop-nav [data-route="consultations"]');
+      await page.waitForSelector('#consultations-table');
+      await page.click('#consultations-table tbody tr:first-child a[data-action="view"]');
+      await page.waitForSelector('#linked-documents');
+      // "Ajouter" buttons for each document type (contain bi-plus icon)
+      const addBtns = page.locator('#linked-documents a:has(.bi-plus)');
+      expect(await addBtns.count()).toBe(3);
+      // First consultation has linked report + feuille — check view/edit/delete buttons
+      const viewBtns = page.locator('#linked-documents .list-group-item .btn-outline-primary');
+      expect(await viewBtns.count()).toBeGreaterThanOrEqual(1);
+      const editBtns = page.locator('#linked-documents .list-group-item .btn-outline-warning');
+      expect(await editBtns.count()).toBeGreaterThanOrEqual(1);
+    });
+
     test('ordonnance détail affiche lien consultation', async ({ page }) => {
       await loginAsDoctor(page);
       await page.click('#desktop-nav [data-route="prescriptions"]');
