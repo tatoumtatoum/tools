@@ -78,6 +78,37 @@ Detect whether an image contains a cat using real-time machine learning, with bo
 
 ---
 
+### 5. 🏥 Cabinet Médical
+
+Application de démonstration pour la gestion d'un cabinet médical, avec authentification par rôle.
+
+**Features:**
+- 👨‍⚕️ Two roles: Doctor (full access) and Assistant (patients + appointments only)
+- 🗂️ Patient records management (personal data, medical history)
+- 📅 Appointment scheduling with status tracking
+- 🩺 Consultations with vital signs and diagnosis
+- 💊 Prescriptions with PDF export (jsPDF)
+- 📋 Medical reports (compte-rendu, certificat, bilan)
+- 📄 Feuilles de soin with CCAM codes and PDF export
+- 📊 Dashboard with KPIs and today's schedule
+- 🔄 Demo data reset button
+- 🇫🇷 Full French localization
+- 📱 Responsive mobile design
+
+**Technologies:**
+- Bootstrap 5 for UI
+- Dexie.js for IndexedDB persistent storage
+- Day.js for French date formatting
+- jsPDF for PDF export
+
+**Demo accounts:**
+- Doctor: `dr.bennani` / `docteur123`
+- Assistant: `fatima.alaoui` / `assistant123`
+
+**[→ Open Cabinet Médical](cabinet-medical.html)**
+
+---
+
 ### 4. 📝 Markdown to HTML Converter
 
 Convert Markdown text to HTML with a live preview, auto-generated table of contents, and copyable raw HTML output.
@@ -182,12 +213,14 @@ tools/
 ├── index.html                          # Main landing page
 ├── mermaid-to-png.html                # Mermaid diagram converter
 ├── ingredient-scanner.html            # Ingredient safety scanner
+├── cabinet-medical.html                # Medical practice management demo
 ├── cat-detector.html                  # Cat detection tool
 ├── markdown-to-html.html              # Markdown to HTML converter
 ├── manifest.json                      # PWA manifest
 ├── ingredient-scanner-manifest.json   # PWA manifest for scanner
 ├── sw.js                             # Service worker
 ├── tests/                            # Playwright tests
+│   ├── cabinet-medical.spec.ts
 │   ├── mermaid-to-png.spec.ts
 │   ├── ingredient-scanner.spec.ts
 │   ├── markdown-to-html.spec.ts
@@ -224,6 +257,9 @@ The tools are deployed using GitHub Pages and are accessible at:
 - **YOLOv8n** - State-of-the-art object detection model
 - **PubChem API** - Chemical safety data
 - **Open Food Facts API** - Product information
+- **Dexie.js** - IndexedDB wrapper for persistent browser storage
+- **Day.js** - Lightweight date formatting
+- **jsPDF** - Client-side PDF generation
 - **Playwright** - End-to-end testing
 - **Progressive Web App (PWA)** - Offline functionality
 
