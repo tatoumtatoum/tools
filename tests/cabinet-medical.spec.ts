@@ -515,5 +515,11 @@ test.describe('Cabinet Médical', () => {
       await loginAsDoctor(page);
       await expect(page.locator('#sidebar')).not.toBeVisible();
     });
+
+    test('footer affiche version et date', async ({ page }) => {
+      await loginAsDoctor(page);
+      await expect(page.locator('.app-footer')).toContainText('v1.0.0');
+      await expect(page.locator('.app-footer')).toContainText('20/02/2026');
+    });
   });
 });
