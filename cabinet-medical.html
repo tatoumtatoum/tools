@@ -904,6 +904,7 @@ async function viewConsultationDetail(mc, id) {
             <span class="actions-cell">
               <a href="#/prescriptions/${p.id}" class="btn btn-sm btn-outline-primary" title="Voir"><i class="bi bi-eye"></i></a>
               <a href="#/prescriptions/${p.id}/edit" class="btn btn-sm btn-outline-warning" title="Modifier"><i class="bi bi-pencil"></i></a>
+              <button onclick="exportPrescriptionPDF(${p.id})" class="btn btn-sm btn-outline-success" title="PDF"><i class="bi bi-file-pdf"></i></button>
               <button onclick="deletePrescription(${p.id})" class="btn btn-sm btn-outline-danger" title="Supprimer"><i class="bi bi-trash"></i></button>
             </span>
           </li>`;
@@ -919,6 +920,7 @@ async function viewConsultationDetail(mc, id) {
             <span class="actions-cell">
               <a href="#/reports/${r.id}" class="btn btn-sm btn-outline-primary" title="Voir"><i class="bi bi-eye"></i></a>
               <a href="#/reports/${r.id}/edit" class="btn btn-sm btn-outline-warning" title="Modifier"><i class="bi bi-pencil"></i></a>
+              <button onclick="exportReportPDF(${r.id})" class="btn btn-sm btn-outline-success" title="PDF"><i class="bi bi-file-pdf"></i></button>
               <button onclick="deleteReport(${r.id})" class="btn btn-sm btn-outline-danger" title="Supprimer"><i class="bi bi-trash"></i></button>
             </span>
           </li>`
@@ -934,6 +936,7 @@ async function viewConsultationDetail(mc, id) {
             <span class="actions-cell">
               <a href="#/feuilles/${f.id}" class="btn btn-sm btn-outline-primary" title="Voir"><i class="bi bi-eye"></i></a>
               <a href="#/feuilles/${f.id}/edit" class="btn btn-sm btn-outline-warning" title="Modifier"><i class="bi bi-pencil"></i></a>
+              <button onclick="exportFeuillePDF(${f.id})" class="btn btn-sm btn-outline-success" title="PDF"><i class="bi bi-file-pdf"></i></button>
               <button onclick="deleteFeuille(${f.id})" class="btn btn-sm btn-outline-danger" title="Supprimer"><i class="bi bi-trash"></i></button>
             </span>
           </li>`
@@ -1471,8 +1474,9 @@ function generateReportPDF(report, patient) {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF();
   let y = pdfHeader(doc, report.type ? report.type.toUpperCase() : 'COMPTE-RENDU');
-  y = pdfPatientInfo(doc, patient, y);
-  doc.text(`Date : ${fmtDate(report.date)}`, 120, y - 6);
+  doc.text(`Patient : ${patient.firstName} ${patient.lastName}`, 20, y);
+  doc.text(`Date : ${fmtDate(report.date)}`, 120, y); y += 6;
+  doc.text(`N. Secu : ${patient.numSecu || '—'}`, 20, y); y += 6;
   doc.line(20, y + 2, 190, y + 2); y += 10;
   doc.setFontSize(12);
   doc.text(report.title, 20, y); y += 8;
