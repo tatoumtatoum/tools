@@ -62,11 +62,11 @@ Scan food and cosmetic product labels to identify dangerous chemicals, carcinoge
 Detect whether an image contains a cat using real-time machine learning, with bounding box highlighting.
 
 **Features:**
-- 🤖 Real-time object detection using TensorFlow.js COCO-SSD (MobileNet v2)
+- 🤖 Real-time object detection using YOLOv8n via ONNX Runtime Web
 - 📹 Live webcam detection with FPS counter
 - 🖼️ Upload or drag-and-drop images
 - 🟩 Bounding box highlighting on detected cats
-- ⚡ Fast inference (~100-300ms per frame)
+- ⚡ High accuracy detection (37.3 mAP on COCO)
 - 📱 Responsive mobile design
 
 **Use Cases:**
@@ -220,8 +220,8 @@ The tools are deployed using GitHub Pages and are accessible at:
 - **marked.js** - Markdown parsing
 - **Mermaid.js** - Diagram rendering
 - **Tesseract.js** - OCR text extraction
-- **TensorFlow.js** - Machine learning inference in browser
-- **COCO-SSD** - Real-time object detection model
+- **ONNX Runtime Web** - High-performance ML inference in browser
+- **YOLOv8n** - State-of-the-art object detection model
 - **PubChem API** - Chemical safety data
 - **Open Food Facts API** - Product information
 - **Playwright** - End-to-end testing

@@ -35,9 +35,9 @@ test.describe('Cat Detector', () => {
       await expect(status).toContainText('loaded', { timeout: 90000 });
     });
 
-    test('should mention TensorFlow and COCO-SSD', async ({ page }) => {
+    test('should mention YOLOv8 and ONNX', async ({ page }) => {
       const badge = page.locator('.badge');
-      await expect(badge).toContainText(/TensorFlow|COCO-SSD/i);
+      await expect(badge).toContainText(/YOLOv8|ONNX/i);
     });
   });
 

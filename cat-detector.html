@@ -4,8 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Cat Detector</title>
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0/dist/tf.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.17.3/dist/ort.min.js"></script>
   <style>
     * { box-sizing: border-box; }
     body {
@@ -181,7 +180,7 @@
 <body>
   <h1>🐱 Cat Detector</h1>
   <div id="status">Loading model…</div>
-  <div class="badge">Powered by TensorFlow.js · COCO-SSD (Real-time Object Detection)</div>
+  <div class="badge">Powered by YOLOv8n · ONNX Runtime Web (Real-time Object Detection)</div>
 
   <div class="mode-toggle">
     <button id="modeImage" class="active">📷 Image</button>
@@ -219,13 +218,38 @@
   </div>
 
   <script>
-    const CAT_LABELS = ['cat'];
+    // --- Configuration ---
+    const MODEL_URL = 'https://huggingface.co/salim4n/yolov8n-detect-onnx/resolve/main/yolov8n-onnx-web/yolov8n.onnx';
+    const MODEL_SIZE = 640;
+    const CONF_THRESHOLD = 0.25;
+    const IOU_THRESHOLD = 0.45;
+    const CAT_CLASS_ID = 15;
 
-    let model = null;
+    const COCO_LABELS = [
+      "person","bicycle","car","motorcycle","airplane","bus","train","truck","boat",
+      "traffic light","fire hydrant","stop sign","parking meter","bench","bird","cat",
+      "dog","horse","sheep","cow","elephant","bear","zebra","giraffe","backpack",
+      "umbrella","handbag","tie","suitcase","frisbee","skis","snowboard","sports ball",
+      "kite","baseball bat","baseball glove","skateboard","surfboard","tennis racket",
+      "bottle","wine glass","cup","fork","knife","spoon","bowl","banana","apple",
+      "sandwich","orange","broccoli","carrot","hot dog","pizza","donut","cake","chair",
+      "couch","potted plant","bed","dining table","toilet","tv","laptop","mouse",
+      "remote","keyboard","cell phone","microwave","oven","toaster","sink",
+      "refrigerator","book","clock","vase","scissors","teddy bear","hair drier","toothbrush"
+    ];
+
+    // --- State ---
+    let session = null;
     let webcamStream = null;
     let detecting = false;
     let animFrameId = null;
+    // Reusable preprocessing canvas
+    const prepCanvas = document.createElement('canvas');
+    prepCanvas.width = MODEL_SIZE;
+    prepCanvas.height = MODEL_SIZE;
+    const prepCtx = prepCanvas.getContext('2d', { willReadFrequently: true });
 
+    // --- DOM refs ---
     const dropZone = document.getElementById('dropZone');
     const fileInput = document.getElementById('fileInput');
     const preview = document.getElementById('preview');
@@ -243,7 +267,7 @@
     const webcamBtn = document.getElementById('webcamBtn');
     const fpsCounter = document.getElementById('fpsCounter');
 
-    // Mode toggle
+    // --- Mode toggle ---
     modeImage.addEventListener('click', () => {
       modeImage.classList.add('active');
       modeWebcam.classList.remove('active');
@@ -263,21 +287,118 @@
       predictions.style.display = 'none';
     });
 
-    // Load COCO-SSD model
+    // --- Model loading ---
     async function loadModel() {
       try {
-        model = await cocoSsd.load({ base: 'mobilenet_v2' });
+        ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.17.3/dist/';
+        status.textContent = 'Downloading YOLOv8n model…';
+        session = await ort.InferenceSession.create(MODEL_URL, {
+          executionProviders: ['wasm'],
+          graphOptimizationLevel: 'all',
+        });
+        // Warmup run
+        status.textContent = 'Warming up model…';
+        const warmup = new ort.Tensor('float32', new Float32Array(3 * MODEL_SIZE * MODEL_SIZE), [1, 3, MODEL_SIZE, MODEL_SIZE]);
+        await session.run({ [session.inputNames[0]]: warmup });
         status.textContent = '✅ Model loaded! Drop an image or start webcam.';
       } catch (err) {
         status.textContent = '❌ Failed to load model: ' + err.message;
       }
     }
 
-    function isCat(label) {
-      return CAT_LABELS.includes(label.toLowerCase());
+    // --- Preprocessing (letterbox resize to 640x640) ---
+    function preprocess(source) {
+      const srcW = source.naturalWidth || source.videoWidth || source.width;
+      const srcH = source.naturalHeight || source.videoHeight || source.height;
+      const scale = Math.min(MODEL_SIZE / srcW, MODEL_SIZE / srcH);
+      const newW = Math.round(srcW * scale);
+      const newH = Math.round(srcH * scale);
+      const padX = Math.round((MODEL_SIZE - newW) / 2);
+      const padY = Math.round((MODEL_SIZE - newH) / 2);
+
+      prepCtx.fillStyle = '#808080';
+      prepCtx.fillRect(0, 0, MODEL_SIZE, MODEL_SIZE);
+      prepCtx.drawImage(source, padX, padY, newW, newH);
+
+      const imgData = prepCtx.getImageData(0, 0, MODEL_SIZE, MODEL_SIZE);
+      const pixels = MODEL_SIZE * MODEL_SIZE;
+      const float32 = new Float32Array(3 * pixels);
+
+      for (let i = 0; i < pixels; i++) {
+        float32[i] = imgData.data[i * 4] / 255;
+        float32[pixels + i] = imgData.data[i * 4 + 1] / 255;
+        float32[2 * pixels + i] = imgData.data[i * 4 + 2] / 255;
+      }
+
+      return { float32, scale, padX, padY };
     }
 
-    function drawBoxesOnCanvas(canvas, detections, sourceW, sourceH) {
+    // --- Detection ---
+    async function detect(source) {
+      const { float32, scale, padX, padY } = preprocess(source);
+      const tensor = new ort.Tensor('float32', float32, [1, 3, MODEL_SIZE, MODEL_SIZE]);
+      const outputName = session.outputNames[0];
+      const results = await session.run({ [session.inputNames[0]]: tensor });
+      const output = results[outputName];
+
+      // Output shape: [1, 84, 8400]
+      const numDetections = output.dims[2];
+      const numFields = output.dims[1]; // 4 + numClasses
+      const raw = [];
+
+      for (let i = 0; i < numDetections; i++) {
+        let maxScore = 0;
+        let classId = -1;
+        for (let j = 4; j < numFields; j++) {
+          const score = output.data[j * numDetections + i];
+          if (score > maxScore) { maxScore = score; classId = j - 4; }
+        }
+        if (maxScore < CONF_THRESHOLD) continue;
+
+        const cx = output.data[0 * numDetections + i];
+        const cy = output.data[1 * numDetections + i];
+        const w  = output.data[2 * numDetections + i];
+        const h  = output.data[3 * numDetections + i];
+
+        // Convert from model space to original image space
+        raw.push({
+          classId, score: maxScore,
+          x: (cx - w / 2 - padX) / scale,
+          y: (cy - h / 2 - padY) / scale,
+          w: w / scale,
+          h: h / scale,
+          class: COCO_LABELS[classId] || `class_${classId}`
+        });
+      }
+
+      return nms(raw, IOU_THRESHOLD);
+    }
+
+    // --- NMS ---
+    function nms(dets, iouThresh) {
+      dets.sort((a, b) => b.score - a.score);
+      const kept = [];
+      const skip = new Set();
+      for (let i = 0; i < dets.length; i++) {
+        if (skip.has(i)) continue;
+        kept.push(dets[i]);
+        for (let j = i + 1; j < dets.length; j++) {
+          if (skip.has(j) || dets[i].classId !== dets[j].classId) continue;
+          if (iou(dets[i], dets[j]) > iouThresh) skip.add(j);
+        }
+      }
+      return kept;
+    }
+
+    function iou(a, b) {
+      const x1 = Math.max(a.x, b.x), y1 = Math.max(a.y, b.y);
+      const x2 = Math.min(a.x + a.w, b.x + b.w), y2 = Math.min(a.y + a.h, b.y + b.h);
+      const inter = Math.max(0, x2 - x1) * Math.max(0, y2 - y1);
+      return inter / (a.w * a.h + b.w * b.h - inter);
+    }
+
+    // --- Drawing ---
+    function drawBoxes(canvas, detections, sourceW, sourceH) {
       const ctx = canvas.getContext('2d');
       const displayW = canvas.clientWidth;
       const displayH = canvas.clientHeight;
@@ -286,33 +407,29 @@
 
       const scaleX = displayW / sourceW;
       const scaleY = displayH / sourceH;
-
       ctx.clearRect(0, 0, displayW, displayH);
 
-      const catDetections = detections.filter(d => isCat(d.class));
-      for (const det of catDetections) {
-        const [bx, by, bw, bh] = det.bbox;
-        const x = bx * scaleX;
-        const y = by * scaleY;
-        const w = bw * scaleX;
-        const h = bh * scaleY;
+      const cats = detections.filter(d => d.classId === CAT_CLASS_ID);
+      for (const det of cats) {
+        const x = det.x * scaleX, y = det.y * scaleY;
+        const w = det.w * scaleX, h = det.h * scaleY;
 
         ctx.strokeStyle = '#00ff88';
         ctx.lineWidth = 3;
         ctx.strokeRect(x, y, w, h);
 
-        const label = `🐱 ${det.class} ${(det.score * 100).toFixed(1)}%`;
+        const label = `🐱 cat ${(det.score * 100).toFixed(1)}%`;
         ctx.font = 'bold 14px sans-serif';
-        const textW = ctx.measureText(label).width;
+        const tw = ctx.measureText(label).width;
         ctx.fillStyle = 'rgba(0, 255, 136, 0.85)';
-        ctx.fillRect(x, y - 22, textW + 8, 22);
+        ctx.fillRect(x, y - 22, tw + 8, 22);
         ctx.fillStyle = '#000';
         ctx.fillText(label, x + 4, y - 6);
       }
-      return catDetections;
+      return cats;
     }
 
-    // Image mode detection
+    // --- Image mode ---
     async function classifyImage(imgEl) {
       resultEl.style.display = 'block';
       resultEl.className = 'loading';
@@ -321,25 +438,22 @@
       boxCanvas.getContext('2d').clearRect(0, 0, boxCanvas.width, boxCanvas.height);
 
       try {
-        const detections = await model.detect(imgEl);
-
-        const topDetections = detections.slice(0, 5);
-        if (topDetections.length > 0) {
-          predictionList.innerHTML = topDetections.map(d => `
+        const detections = await detect(imgEl);
+        const top = detections.slice(0, 5);
+        if (top.length > 0) {
+          predictionList.innerHTML = top.map(d => `
             <div class="prediction">
               <span class="name">${d.class}</span>
               <span class="confidence">${(d.score * 100).toFixed(1)}%</span>
-            </div>
-          `).join('');
+            </div>`).join('');
         } else {
           predictionList.innerHTML = '<div class="prediction"><span class="name">No objects detected</span><span class="confidence">—</span></div>';
         }
         predictions.style.display = 'block';
 
-        const catDetections = drawBoxesOnCanvas(boxCanvas, detections, imgEl.clientWidth, imgEl.clientHeight);
-
-        if (catDetections.length > 0) {
-          const best = catDetections.reduce((a, b) => a.score > b.score ? a : b);
+        const cats = drawBoxes(boxCanvas, detections, imgEl.naturalWidth, imgEl.naturalHeight);
+        if (cats.length > 0) {
+          const best = cats.reduce((a, b) => a.score > b.score ? a : b);
           resultEl.className = 'cat';
           resultEl.textContent = `✅ Cat found! (${(best.score * 100).toFixed(1)}%)`;
         } else {
@@ -352,7 +466,7 @@
       }
     }
 
-    // Webcam mode
+    // --- Webcam mode ---
     async function startWebcam() {
       try {
         webcamStream = await navigator.mediaDevices.getUserMedia({
@@ -371,34 +485,24 @@
 
     function stopWebcam() {
       detecting = false;
-      if (animFrameId) {
-        cancelAnimationFrame(animFrameId);
-        animFrameId = null;
-      }
-      if (webcamStream) {
-        webcamStream.getTracks().forEach(t => t.stop());
-        webcamStream = null;
-      }
+      if (animFrameId) { cancelAnimationFrame(animFrameId); animFrameId = null; }
+      if (webcamStream) { webcamStream.getTracks().forEach(t => t.stop()); webcamStream = null; }
       webcamVideo.srcObject = null;
       webcamBtn.textContent = '▶ Start Webcam';
       webcamBtn.classList.remove('stop');
       fpsCounter.textContent = 'FPS: --';
-      const ctx = webcamCanvas.getContext('2d');
-      ctx.clearRect(0, 0, webcamCanvas.width, webcamCanvas.height);
+      webcamCanvas.getContext('2d').clearRect(0, 0, webcamCanvas.width, webcamCanvas.height);
     }
 
     let lastFrameTime = 0;
     async function detectLoop() {
-      if (!detecting || !model) return;
-
+      if (!detecting || !session) return;
       const now = performance.now();
       try {
-        const detections = await model.detect(webcamVideo);
-        const catDets = drawBoxesOnCanvas(webcamCanvas, detections, webcamVideo.videoWidth, webcamVideo.videoHeight);
-
-        // Update result
-        if (catDets.length > 0) {
-          const best = catDets.reduce((a, b) => a.score > b.score ? a : b);
+        const detections = await detect(webcamVideo);
+        const cats = drawBoxes(webcamCanvas, detections, webcamVideo.videoWidth, webcamVideo.videoHeight);
+        if (cats.length > 0) {
+          const best = cats.reduce((a, b) => a.score > b.score ? a : b);
           resultEl.style.display = 'block';
           resultEl.className = 'cat';
           resultEl.textContent = `✅ Cat found! (${(best.score * 100).toFixed(1)}%)`;
@@ -407,9 +511,7 @@
           resultEl.className = 'not-cat';
           resultEl.textContent = '❌ No cat detected';
         }
-      } catch (err) {
-        // skip frame errors
-      }
+      } catch (err) { /* skip frame errors */ }
 
       const elapsed = performance.now() - now;
       if (lastFrameTime > 0) {
@@ -417,32 +519,20 @@
         fpsCounter.textContent = `FPS: ${fps} · ${Math.round(elapsed)}ms/frame`;
       }
       lastFrameTime = performance.now();
-
-      if (detecting) {
-        animFrameId = requestAnimationFrame(detectLoop);
-      }
+      if (detecting) animFrameId = requestAnimationFrame(detectLoop);
     }
 
     webcamBtn.addEventListener('click', () => {
-      if (webcamStream) {
-        stopWebcam();
-        resultEl.style.display = 'none';
-      } else {
-        startWebcam();
-      }
+      if (webcamStream) { stopWebcam(); resultEl.style.display = 'none'; }
+      else startWebcam();
     });
 
-    // File handling
+    // --- File handling ---
     function handleFile(file) {
-      if (!file || !file.type.startsWith('image/')) {
-        alert('Please select an image file');
-        return;
-      }
-
+      if (!file || !file.type.startsWith('image/')) { alert('Please select an image file'); return; }
       const reader = new FileReader();
       reader.onload = (e) => {
-        const dataUrl = e.target.result;
-        imagePreview.src = dataUrl;
+        imagePreview.src = e.target.result;
         preview.style.display = 'block';
         preview.dataset.shown = 'true';
         imagePreview.onload = () => classifyImage(imagePreview);
@@ -451,19 +541,11 @@
     }
 
     dropZone.addEventListener('click', () => fileInput.click());
-    fileInput.addEventListener('change', (e) => {
-      if (e.target.files.length) handleFile(e.target.files[0]);
-    });
-    dropZone.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      dropZone.classList.add('dragover');
-    });
-    dropZone.addEventListener('dragleave', () => {
-      dropZone.classList.remove('dragover');
-    });
+    fileInput.addEventListener('change', (e) => { if (e.target.files.length) handleFile(e.target.files[0]); });
+    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
     dropZone.addEventListener('drop', (e) => {
-      e.preventDefault();
-      dropZone.classList.remove('dragover');
+      e.preventDefault(); dropZone.classList.remove('dragover');
       if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
     });
 
