@@ -12,6 +12,7 @@
     #login-page {
       min-height: 100vh; display: flex; align-items: center; justify-content: center;
       background: linear-gradient(135deg, #1a73e8 0%, #0d47a1 100%);
+      position: relative;
     }
     .login-card {
       width: 100%; max-width: 400px; padding: 2rem; background: #fff;
@@ -112,6 +113,9 @@
       <p class="mb-0">Assistante : <strong>fatima.alaoui</strong> / assistant123</p>
     </div>
   </div>
+  <div class="position-absolute bottom-0 w-100 text-center pb-3" style="font-size:.75rem;color:rgba(255,255,255,.6)">
+    v1.0.0 — 20/02/2026 à 13:57
+  </div>
 </div>
 
 <!-- ===== APP SHELL ===== -->
@@ -155,7 +159,7 @@
 
   <!-- Footer -->
   <footer class="app-footer">
-    Cabinet Médical v1.0.0 — Publié le 20/02/2026
+    Cabinet Médical v1.0.0 — Publié le 20/02/2026 à 13:57
   </footer>
 </div>
 
@@ -344,7 +348,10 @@ function renderNavigation() {
   const mobileInfo = document.getElementById('mobile-user-info');
   if (mobileInfo && currentUser) {
     const roleLabel = currentUser.role === 'doctor' ? 'Médecin' : 'Assistante';
-    mobileInfo.innerHTML = `<i class="bi bi-person-circle me-1"></i> ${currentUser.fullName} <span class="text-muted">— ${roleLabel}</span>`;
+    const name = currentUser.role === 'doctor'
+      ? `${currentUser.title} ${currentUser.firstName} ${currentUser.lastName}`
+      : `${currentUser.firstName} ${currentUser.lastName}`;
+    mobileInfo.innerHTML = `<i class="bi bi-person-circle me-1"></i> ${name} <span class="text-muted">— ${roleLabel}</span>`;
   }
 }
 
