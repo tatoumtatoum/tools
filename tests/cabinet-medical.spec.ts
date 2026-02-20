@@ -430,6 +430,71 @@ test.describe('Cabinet Médical', () => {
     });
   });
 
+  // ===== PDF EXPORT =====
+  test.describe('Export PDF', () => {
+    test('bouton PDF sur liste patients', async ({ page }) => {
+      await loginAsDoctor(page);
+      await page.click('#desktop-nav [data-route="patients"]');
+      await page.waitForSelector('#patients-table');
+      await expect(page.locator('#patients-table .btn-outline-success[title="PDF"]').first()).toBeVisible();
+    });
+
+    test('bouton PDF sur fiche patient', async ({ page }) => {
+      await loginAsDoctor(page);
+      await page.click('#desktop-nav [data-route="patients"]');
+      await page.waitForSelector('#patients-table');
+      await page.click('#patients-table tbody tr:first-child a[data-action="view"]');
+      await page.waitForSelector('.patient-detail');
+      await expect(page.locator('button:has(.bi-file-pdf)')).toBeVisible();
+    });
+
+    test('bouton PDF sur liste consultations', async ({ page }) => {
+      await loginAsDoctor(page);
+      await page.click('#desktop-nav [data-route="consultations"]');
+      await page.waitForSelector('#consultations-table');
+      await expect(page.locator('#consultations-table .btn-outline-success[title="PDF"]').first()).toBeVisible();
+    });
+
+    test('bouton PDF sur détail consultation', async ({ page }) => {
+      await loginAsDoctor(page);
+      await page.click('#desktop-nav [data-route="consultations"]');
+      await page.waitForSelector('#consultations-table');
+      await page.click('#consultations-table tbody tr:first-child a[data-action="view"]');
+      await page.waitForSelector('.consultation-detail');
+      await expect(page.locator('#export-pdf-btn')).toBeVisible();
+    });
+
+    test('bouton PDF sur liste comptes-rendus', async ({ page }) => {
+      await loginAsDoctor(page);
+      await page.click('#desktop-nav [data-route="reports"]');
+      await page.waitForSelector('#reports-table');
+      await expect(page.locator('#reports-table .btn-outline-success[title="PDF"]').first()).toBeVisible();
+    });
+
+    test('bouton PDF sur détail compte-rendu', async ({ page }) => {
+      await loginAsDoctor(page);
+      await page.click('#desktop-nav [data-route="reports"]');
+      await page.waitForSelector('#reports-table');
+      await page.click('#reports-table tbody tr:first-child a[data-action="view"]');
+      await page.waitForSelector('.report-detail');
+      await expect(page.locator('#export-pdf-btn')).toBeVisible();
+    });
+
+    test('bouton PDF sur liste feuilles de soin', async ({ page }) => {
+      await loginAsDoctor(page);
+      await page.click('#desktop-nav [data-route="feuilles"]');
+      await page.waitForSelector('#feuilles-table');
+      await expect(page.locator('#feuilles-table .btn-outline-success[title="PDF"]').first()).toBeVisible();
+    });
+
+    test('pas de bouton PDF sur liste rendez-vous', async ({ page }) => {
+      await loginAsDoctor(page);
+      await page.click('#desktop-nav [data-route="appointments"]');
+      await page.waitForSelector('#appointments-table');
+      await expect(page.locator('#appointments-table .btn-outline-success[title="PDF"]')).toHaveCount(0);
+    });
+  });
+
   // ===== RESPONSIVE =====
   test.describe('Responsive', () => {
     test('connexion sur mobile', async ({ page }) => {

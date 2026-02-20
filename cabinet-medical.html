@@ -498,6 +498,7 @@ async function viewPatients(mc) {
             <td class="actions-cell">
               <a href="#/patients/${p.id}" data-action="view" class="btn btn-sm btn-outline-primary" title="Voir"><i class="bi bi-eye"></i></a>
               <a href="#/patients/${p.id}/edit" class="btn btn-sm btn-outline-warning" title="Modifier"><i class="bi bi-pencil"></i></a>
+              <button onclick="exportPatientPDF(${p.id})" class="btn btn-sm btn-outline-success" title="PDF"><i class="bi bi-file-pdf"></i></button>
               <button onclick="deletePatient(${p.id})" class="btn btn-sm btn-outline-danger" title="Supprimer"><i class="bi bi-trash"></i></button>
             </td></tr>`).join('')}
         </tbody></table></div></div></div>`;
@@ -606,7 +607,8 @@ async function viewPatientDetail(mc, id) {
   }
 
   mc.innerHTML = viewHeader(`${p.lastName} ${p.firstName}`,
-    `<a href="#/patients/${id}/edit" class="btn btn-outline-warning btn-sm me-1"><i class="bi bi-pencil"></i> Modifier</a>
+    `<button onclick="exportPatientPDF(${id})" class="btn btn-sm btn-outline-success me-1"><i class="bi bi-file-pdf"></i> PDF</button>
+     <a href="#/patients/${id}/edit" class="btn btn-outline-warning btn-sm me-1"><i class="bi bi-pencil"></i> Modifier</a>
      <a href="#/patients" class="btn btn-outline-secondary btn-sm">Retour</a>`) + `
     <div class="card patient-detail"><div class="card-body">
       <ul class="nav nav-tabs mb-3">
@@ -768,6 +770,7 @@ async function viewConsultations(mc) {
           <td class="actions-cell">
             <a href="#/consultations/${c.id}" data-action="view" class="btn btn-sm btn-outline-primary"><i class="bi bi-eye"></i></a>
             <a href="#/consultations/${c.id}/edit" class="btn btn-sm btn-outline-warning"><i class="bi bi-pencil"></i></a>
+            <button onclick="exportConsultationPDF(${c.id})" class="btn btn-sm btn-outline-success" title="PDF"><i class="bi bi-file-pdf"></i></button>
             <button onclick="deleteConsultation(${c.id})" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
           </td></tr>`).join('')}
       </tbody></table></div></div></div>`;
@@ -862,6 +865,7 @@ async function viewConsultationDetail(mc, id) {
   const linkedAppt = c.appointmentId ? await db.appointments.get(c.appointmentId) : null;
 
   mc.innerHTML = viewHeader('Détail consultation', `
+    <button id="export-pdf-btn" class="btn btn-sm btn-outline-success me-1"><i class="bi bi-file-pdf"></i> PDF</button>
     <a href="#/prescriptions/new?patientId=${c.patientId}&consultationId=${c.id}" class="btn btn-sm btn-outline-success me-1"><i class="bi bi-file-earmark-medical"></i> Ordonnance</a>
     <a href="#/reports/new?patientId=${c.patientId}&consultationId=${c.id}" class="btn btn-sm btn-outline-info me-1"><i class="bi bi-journal-medical"></i> Compte-rendu</a>
     <a href="#/feuilles/new?patientId=${c.patientId}&consultationId=${c.id}" class="btn btn-sm btn-outline-warning me-1"><i class="bi bi-receipt"></i> Feuille de soin</a>
@@ -936,6 +940,11 @@ async function viewConsultationDetail(mc, id) {
         ).join('')}</ul>` : '<p class="text-muted small">Aucune feuille de soin liée</p>'}
       </div>
     </div>`;
+
+  document.getElementById('export-pdf-btn').addEventListener('click', () => {
+    const patient = { firstName: patientName.split(' ').slice(1).join(' '), lastName: patientName.split(' ')[0], patientId: c.patientId };
+    generateConsultationPDF(c, patientName, vs);
+  });
 }
 
 // ========================================================================
@@ -962,6 +971,7 @@ async function viewPrescriptions(mc) {
           <td class="actions-cell">
             <a href="#/prescriptions/${p.id}" data-action="view" class="btn btn-sm btn-outline-primary"><i class="bi bi-eye"></i></a>
             <a href="#/prescriptions/${p.id}/edit" class="btn btn-sm btn-outline-warning"><i class="bi bi-pencil"></i></a>
+            <button onclick="exportPrescriptionPDF(${p.id})" class="btn btn-sm btn-outline-success" title="PDF"><i class="bi bi-file-pdf"></i></button>
             <button onclick="deletePrescription(${p.id})" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
           </td></tr>`).join('')}
       </tbody></table></div></div></div>`;
@@ -1099,6 +1109,7 @@ async function viewReports(mc) {
           <td class="actions-cell">
             <a href="#/reports/${r.id}" data-action="view" class="btn btn-sm btn-outline-primary"><i class="bi bi-eye"></i></a>
             <a href="#/reports/${r.id}/edit" class="btn btn-sm btn-outline-warning"><i class="bi bi-pencil"></i></a>
+            <button onclick="exportReportPDF(${r.id})" class="btn btn-sm btn-outline-success" title="PDF"><i class="bi bi-file-pdf"></i></button>
             <button onclick="deleteReport(${r.id})" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
           </td></tr>`).join('')}
       </tbody></table></div></div></div>`;
@@ -1166,8 +1177,10 @@ async function viewReportDetail(mc, id) {
   const r = await db.medicalReports.get(id);
   if (!r) { mc.innerHTML = '<h2>Compte-rendu non trouvé</h2>'; return; }
   const patientName = await getPatientName(r.patientId);
+  const patient = await db.patients.get(r.patientId);
 
   mc.innerHTML = viewHeader('Détail compte-rendu', `
+    <button id="export-pdf-btn" class="btn btn-sm btn-outline-success me-1"><i class="bi bi-file-pdf"></i> PDF</button>
     <a href="#/reports/${id}/edit" class="btn btn-sm btn-outline-warning me-1"><i class="bi bi-pencil"></i> Modifier</a>
     <a href="#/reports" class="btn btn-sm btn-outline-secondary">Retour</a>`) + `
     <div class="card report-detail"><div class="card-body">
@@ -1181,6 +1194,8 @@ async function viewReportDetail(mc, id) {
       <h5>${r.title}</h5>
       <div class="border rounded p-3 bg-light" style="white-space:pre-wrap">${r.content}</div>
     </div></div>`;
+
+  document.getElementById('export-pdf-btn').addEventListener('click', () => generateReportPDF(r, patient));
 }
 
 // ========================================================================
@@ -1205,6 +1220,7 @@ async function viewFeuilles(mc) {
           <td class="actions-cell">
             <a href="#/feuilles/${f.id}" data-action="view" class="btn btn-sm btn-outline-primary"><i class="bi bi-eye"></i></a>
             <a href="#/feuilles/${f.id}/edit" class="btn btn-sm btn-outline-warning"><i class="bi bi-pencil"></i></a>
+            <button onclick="exportFeuillePDF(${f.id})" class="btn btn-sm btn-outline-success" title="PDF"><i class="bi bi-file-pdf"></i></button>
             <button onclick="deleteFeuille(${f.id})" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
           </td></tr>`).join('')}
       </tbody></table></div></div></div>`;
@@ -1340,6 +1356,134 @@ async function viewFeuilleDetail(mc, id) {
 // ========================================================================
 // PDF GENERATION
 // ========================================================================
+function pdfHeader(doc, title) {
+  doc.setFont('helvetica');
+  doc.setFontSize(16);
+  doc.text(title, 105, 25, { align: 'center' });
+  doc.setFontSize(10);
+  doc.text('Dr. Youssef Bennani — Medecin Generaliste', 20, 40);
+  doc.text('Cabinet Medical — Demonstration', 20, 46);
+  doc.line(20, 52, 190, 52);
+  return 60;
+}
+
+function pdfPatientInfo(doc, patient, y) {
+  doc.text(`Patient : ${patient.firstName} ${patient.lastName}`, 20, y);
+  doc.text(`N. Secu : ${patient.numSecu || '—'}`, 120, y);
+  return y + 6;
+}
+
+// Export helpers for list views
+async function exportPatientPDF(id) {
+  const p = await db.patients.get(id);
+  if (p) generatePatientPDF(p);
+}
+async function exportConsultationPDF(id) {
+  const c = await db.consultations.get(id);
+  if (!c) return;
+  const patient = await db.patients.get(c.patientId);
+  const patientName = patient ? `${patient.lastName} ${patient.firstName}` : 'Inconnu';
+  const vs = c.vitalSigns ? JSON.parse(c.vitalSigns) : {};
+  generateConsultationPDF(c, patientName, vs);
+}
+async function exportPrescriptionPDF(id) {
+  const p = await db.prescriptions.get(id);
+  if (!p) return;
+  const patient = await db.patients.get(p.patientId);
+  if (patient) generatePrescriptionPDF(p, patient);
+}
+async function exportReportPDF(id) {
+  const r = await db.medicalReports.get(id);
+  if (!r) return;
+  const patient = await db.patients.get(r.patientId);
+  if (patient) generateReportPDF(r, patient);
+}
+async function exportFeuillePDF(id) {
+  const f = await db.feuillesDeSoin.get(id);
+  if (!f) return;
+  const patient = await db.patients.get(f.patientId);
+  if (patient) generateFeuillePDF(f, patient);
+}
+
+function generatePatientPDF(patient) {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  let y = pdfHeader(doc, 'FICHE PATIENT');
+  doc.setFontSize(12);
+  doc.text(`${patient.lastName} ${patient.firstName}`, 20, y); y += 8;
+  doc.setFontSize(10);
+  const fields = [
+    ['Date de naissance', fmtDate(patient.dateOfBirth)],
+    ['Genre', patient.gender === 'M' ? 'Masculin' : 'Feminin'],
+    ['Telephone', patient.phone || '—'],
+    ['Email', patient.email || '—'],
+    ['Adresse', [patient.address, patient.postalCode, patient.city].filter(Boolean).join(', ') || '—'],
+    ['N. Secu', patient.numSecu || '—'],
+    ['Groupe sanguin', patient.bloodType || '—'],
+    ['Mutuelle', patient.mutuelle || '—'],
+    ['Medecin traitant', patient.medecinTraitant || '—'],
+    ['Allergies', patient.allergies || 'Aucune'],
+    ['Antecedents', patient.antecedents || 'Aucun'],
+    ['Notes', patient.notes || '—']
+  ];
+  fields.forEach(([label, value]) => {
+    doc.text(`${label} : ${value}`, 20, y); y += 6;
+  });
+  doc.save(`patient_${patient.lastName}_${patient.firstName}.pdf`);
+}
+
+function generateConsultationPDF(consultation, patientName, vs) {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  let y = pdfHeader(doc, 'CONSULTATION');
+  doc.text(`Patient : ${patientName}`, 20, y);
+  doc.text(`Date : ${fmtDate(consultation.date)}`, 120, y); y += 8;
+  doc.line(20, y, 190, y); y += 8;
+  const sections = [
+    ['Motif', consultation.motif],
+    ['Symptomes', consultation.symptoms],
+    ['Examen clinique', consultation.examenClinique],
+    ['Diagnostic', consultation.diagnostic],
+    ['Notes', consultation.notes]
+  ];
+  sections.forEach(([label, value]) => {
+    if (value) {
+      doc.setFontSize(11);
+      doc.text(`${label} :`, 20, y); y += 6;
+      doc.setFontSize(10);
+      const lines = doc.splitTextToSize(value, 160);
+      doc.text(lines, 25, y); y += lines.length * 5 + 4;
+    }
+  });
+  if (vs && Object.values(vs).some(v => v)) {
+    doc.setFontSize(11);
+    doc.text('Signes vitaux :', 20, y); y += 6;
+    doc.setFontSize(10);
+    const vitals = [`Tension: ${vs.tension || '—'}`, `Pouls: ${vs.pouls || '—'}`, `T.: ${vs.temperature || '—'}C`, `Poids: ${vs.poids || '—'} kg`, `Taille: ${vs.taille || '—'} cm`];
+    doc.text(vitals.join('   |   '), 25, y); y += 8;
+  }
+  doc.setFontSize(10);
+  doc.text('Signature : Dr. Youssef Bennani', 130, 270);
+  doc.save(`consultation_${patientName.replace(/\s+/g, '_')}_${dayjs(consultation.date).format('YYYYMMDD')}.pdf`);
+}
+
+function generateReportPDF(report, patient) {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  let y = pdfHeader(doc, report.type ? report.type.toUpperCase() : 'COMPTE-RENDU');
+  y = pdfPatientInfo(doc, patient, y);
+  doc.text(`Date : ${fmtDate(report.date)}`, 120, y - 6);
+  doc.line(20, y + 2, 190, y + 2); y += 10;
+  doc.setFontSize(12);
+  doc.text(report.title, 20, y); y += 8;
+  doc.setFontSize(10);
+  const lines = doc.splitTextToSize(report.content, 165);
+  doc.text(lines, 20, y);
+  doc.setFontSize(10);
+  doc.text('Signature : Dr. Youssef Bennani', 130, 270);
+  doc.save(`rapport_${patient.lastName}_${dayjs(report.date).format('YYYYMMDD')}.pdf`);
+}
+
 function generatePrescriptionPDF(prescription, patient) {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF();
