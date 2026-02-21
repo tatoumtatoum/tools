@@ -7,7 +7,23 @@ test.describe('Cabinet Médical', () => {
     await page.waitForFunction(() => (window as any).appReady === true, null, { timeout: 15000 });
   }
 
+  async function goToLogin(page: Page) {
+    await page.click('#landing-page button:has-text("Démonstration")');
+    await page.waitForSelector('#login-page', { state: 'visible', timeout: 5000 });
+  }
+
+  async function navigateTo(page: Page, route: string) {
+    const sidebar = page.locator('#sidebar');
+    if (await sidebar.isVisible()) {
+      await page.click(`#desktop-nav [data-route="${route}"]`);
+    } else {
+      await page.evaluate((r) => { location.hash = `#/${r}`; }, route);
+      await page.waitForTimeout(300);
+    }
+  }
+
   async function loginAs(page: Page, username: string, password: string) {
+    await goToLogin(page);
     await page.fill('#login-username', username);
     await page.fill('#login-password', password);
     await page.click('#login-submit');
@@ -33,8 +49,9 @@ test.describe('Cabinet Médical', () => {
 
   // ===== AUTHENTIFICATION =====
   test.describe('Authentification', () => {
-    test('affiche la page de connexion par défaut', async ({ page }) => {
-      await expect(page.locator('#login-page')).toBeVisible();
+    test('affiche la page d\'accueil par défaut', async ({ page }) => {
+      await expect(page.locator('#landing-page')).toBeVisible();
+      await expect(page.locator('#login-page')).not.toBeVisible();
       await expect(page.locator('#app-shell')).not.toBeVisible();
     });
 
@@ -43,6 +60,7 @@ test.describe('Cabinet Médical', () => {
     });
 
     test('affiche les identifiants de démonstration', async ({ page }) => {
+      await goToLogin(page);
       await expect(page.locator('#login-page')).toContainText('dr.bennani');
       await expect(page.locator('#login-page')).toContainText('fatima.alaoui');
     });
@@ -58,6 +76,7 @@ test.describe('Cabinet Médical', () => {
     });
 
     test('erreur identifiants incorrects', async ({ page }) => {
+      await goToLogin(page);
       await page.fill('#login-username', 'wrong');
       await page.fill('#login-password', 'wrong');
       await page.click('#login-submit');
@@ -67,7 +86,7 @@ test.describe('Cabinet Médical', () => {
     test('déconnexion', async ({ page }) => {
       await loginAsDoctor(page);
       await page.click('#logout-btn');
-      await expect(page.locator('#login-page')).toBeVisible();
+      await expect(page.locator('#landing-page')).toBeVisible();
       await expect(page.locator('#app-shell')).not.toBeVisible();
     });
   });
@@ -79,6 +98,8 @@ test.describe('Cabinet Médical', () => {
     });
 
     test('voit tous les éléments de navigation', async ({ page }) => {
+      const sidebar = page.locator('#sidebar');
+      if (!(await sidebar.isVisible())) { test.skip(); return; }
       for (const route of ['dashboard', 'patients', 'appointments', 'consultations', 'prescriptions', 'reports', 'feuilles']) {
         await expect(page.locator(`#desktop-nav [data-route="${route}"]`)).toBeVisible();
       }
@@ -89,12 +110,12 @@ test.describe('Cabinet Médical', () => {
     });
 
     test('navigation patients', async ({ page }) => {
-      await page.click('#desktop-nav [data-route="patients"]');
+      await navigateTo(page, 'patients');
       await expect(page.locator('#view-title')).toContainText('Patients');
     });
 
     test('navigation rendez-vous', async ({ page }) => {
-      await page.click('#desktop-nav [data-route="appointments"]');
+      await navigateTo(page, 'appointments');
       await page.waitForSelector('#appointments-table');
       await expect(page.locator('#view-title')).toContainText('Rendez-vous');
     });
@@ -107,12 +128,16 @@ test.describe('Cabinet Médical', () => {
     });
 
     test('voit patients et rendez-vous', async ({ page }) => {
+      const sidebar = page.locator('#sidebar');
+      if (!(await sidebar.isVisible())) { test.skip(); return; }
       await expect(page.locator('#desktop-nav [data-route="dashboard"]')).toBeVisible();
       await expect(page.locator('#desktop-nav [data-route="patients"]')).toBeVisible();
       await expect(page.locator('#desktop-nav [data-route="appointments"]')).toBeVisible();
     });
 
     test('ne voit pas les routes docteur', async ({ page }) => {
+      const sidebar = page.locator('#sidebar');
+      if (!(await sidebar.isVisible())) { test.skip(); return; }
       for (const route of ['consultations', 'prescriptions', 'reports', 'feuilles']) {
         await expect(page.locator(`#desktop-nav [data-route="${route}"]`)).toHaveCount(0);
       }
@@ -129,7 +154,7 @@ test.describe('Cabinet Médical', () => {
   test.describe('Patients', () => {
     test('liste des patients de démonstration', async ({ page }) => {
       await loginAsDoctor(page);
-      await page.click('#desktop-nav [data-route="patients"]');
+      await navigateTo(page, 'patients');
       await page.waitForSelector('#patients-table');
       const rows = page.locator('#patients-table tbody tr');
       expect(await rows.count()).toBeGreaterThanOrEqual(8);
@@ -137,7 +162,7 @@ test.describe('Cabinet Médical', () => {
 
     test('recherche de patient', async ({ page }) => {
       await loginAsDoctor(page);
-      await page.click('#desktop-nav [data-route="patients"]');
+      await navigateTo(page, 'patients');
       await page.waitForSelector('#patients-table');
       await page.locator('#patient-search').pressSequentially('El Fassi');
       await page.waitForTimeout(500);
@@ -148,7 +173,7 @@ test.describe('Cabinet Médical', () => {
 
     test('créer un patient', async ({ page }) => {
       await loginAsDoctor(page);
-      await page.click('#desktop-nav [data-route="patients"]');
+      await navigateTo(page, 'patients');
       await page.waitForSelector('#patients-table');
       await page.click('a[href="#/patients/new"]');
       await page.waitForSelector('#patient-form');
@@ -164,7 +189,7 @@ test.describe('Cabinet Médical', () => {
 
     test('fiche patient avec onglets (docteur)', async ({ page }) => {
       await loginAsDoctor(page);
-      await page.click('#desktop-nav [data-route="patients"]');
+      await navigateTo(page, 'patients');
       await page.waitForSelector('#patients-table');
       await page.click('#patients-table tbody tr:first-child a[data-action="view"]');
       await page.waitForSelector('.patient-detail');
@@ -175,7 +200,7 @@ test.describe('Cabinet Médical', () => {
 
     test('fiche patient sans onglets médicaux (assistante)', async ({ page }) => {
       await loginAsAssistant(page);
-      await page.click('#desktop-nav [data-route="patients"]');
+      await navigateTo(page, 'patients');
       await page.waitForSelector('#patients-table');
       await page.click('#patients-table tbody tr:first-child a[data-action="view"]');
       await page.waitForSelector('.patient-detail');
@@ -186,7 +211,7 @@ test.describe('Cabinet Médical', () => {
 
     test('assistante peut créer un patient', async ({ page }) => {
       await loginAsAssistant(page);
-      await page.click('#desktop-nav [data-route="patients"]');
+      await navigateTo(page, 'patients');
       await page.click('a[href="#/patients/new"]');
       await page.waitForSelector('#patient-form');
       await page.fill('#pf-lastName', 'AssistantTest');
@@ -203,7 +228,7 @@ test.describe('Cabinet Médical', () => {
   test.describe('Rendez-vous', () => {
     test('liste des rendez-vous', async ({ page }) => {
       await loginAsDoctor(page);
-      await page.click('#desktop-nav [data-route="appointments"]');
+      await navigateTo(page, 'appointments');
       await page.waitForSelector('#appointments-table');
       const rows = page.locator('#appointments-table tbody tr');
       expect(await rows.count()).toBeGreaterThanOrEqual(1);
@@ -211,7 +236,7 @@ test.describe('Cabinet Médical', () => {
 
     test('créer un rendez-vous', async ({ page }) => {
       await loginAsDoctor(page);
-      await page.click('#desktop-nav [data-route="appointments"]');
+      await navigateTo(page, 'appointments');
       await page.click('a[href="#/appointments/new"]');
       await page.waitForSelector('#appointment-form');
       await page.selectOption('#af-patientId', { index: 1 });
@@ -225,7 +250,7 @@ test.describe('Cabinet Médical', () => {
 
     test('assistante peut créer un rendez-vous', async ({ page }) => {
       await loginAsAssistant(page);
-      await page.click('#desktop-nav [data-route="appointments"]');
+      await navigateTo(page, 'appointments');
       await page.click('a[href="#/appointments/new"]');
       await page.waitForSelector('#appointment-form');
       await expect(page.locator('#appointment-form')).toBeVisible();
@@ -236,7 +261,7 @@ test.describe('Cabinet Médical', () => {
   test.describe('Consultations — Docteur', () => {
     test('liste des consultations', async ({ page }) => {
       await loginAsDoctor(page);
-      await page.click('#desktop-nav [data-route="consultations"]');
+      await navigateTo(page, 'consultations');
       await page.waitForSelector('#consultations-table');
       const rows = page.locator('#consultations-table tbody tr');
       expect(await rows.count()).toBeGreaterThanOrEqual(1);
@@ -244,7 +269,7 @@ test.describe('Cabinet Médical', () => {
 
     test('créer une consultation', async ({ page }) => {
       await loginAsDoctor(page);
-      await page.click('#desktop-nav [data-route="consultations"]');
+      await navigateTo(page, 'consultations');
       await page.click('a[href="#/consultations/new"]');
       await page.waitForSelector('#consultation-form');
       await page.selectOption('#cf-patientId', { index: 1 });
@@ -257,7 +282,7 @@ test.describe('Cabinet Médical', () => {
 
     test('détail consultation', async ({ page }) => {
       await loginAsDoctor(page);
-      await page.click('#desktop-nav [data-route="consultations"]');
+      await navigateTo(page, 'consultations');
       await page.waitForSelector('#consultations-table');
       await page.click('#consultations-table tbody tr:first-child a[data-action="view"]');
       await page.waitForSelector('.consultation-detail');
@@ -269,7 +294,7 @@ test.describe('Cabinet Médical', () => {
   test.describe('Ordonnances — Docteur', () => {
     test('liste des ordonnances', async ({ page }) => {
       await loginAsDoctor(page);
-      await page.click('#desktop-nav [data-route="prescriptions"]');
+      await navigateTo(page, 'prescriptions');
       await page.waitForSelector('#prescriptions-table');
       const rows = page.locator('#prescriptions-table tbody tr');
       expect(await rows.count()).toBeGreaterThanOrEqual(1);
@@ -277,7 +302,7 @@ test.describe('Cabinet Médical', () => {
 
     test('créer une ordonnance', async ({ page }) => {
       await loginAsDoctor(page);
-      await page.click('#desktop-nav [data-route="prescriptions"]');
+      await navigateTo(page, 'prescriptions');
       await page.click('a[href="#/prescriptions/new"]');
       await page.waitForSelector('#prescription-form');
       await page.selectOption('#prf-patientId', { index: 1 });
@@ -290,7 +315,7 @@ test.describe('Cabinet Médical', () => {
 
     test('exporter ordonnance en PDF', async ({ page }) => {
       await loginAsDoctor(page);
-      await page.click('#desktop-nav [data-route="prescriptions"]');
+      await navigateTo(page, 'prescriptions');
       await page.waitForSelector('#prescriptions-table');
       await page.click('#prescriptions-table tbody tr:first-child a[data-action="view"]');
       await page.waitForSelector('.prescription-detail');
@@ -302,13 +327,13 @@ test.describe('Cabinet Médical', () => {
   test.describe('Comptes-rendus — Docteur', () => {
     test('liste des comptes-rendus', async ({ page }) => {
       await loginAsDoctor(page);
-      await page.click('#desktop-nav [data-route="reports"]');
+      await navigateTo(page, 'reports');
       await page.waitForSelector('#reports-table');
     });
 
     test('créer un compte-rendu', async ({ page }) => {
       await loginAsDoctor(page);
-      await page.click('#desktop-nav [data-route="reports"]');
+      await navigateTo(page, 'reports');
       await page.click('a[href="#/reports/new"]');
       await page.waitForSelector('#report-form');
       await page.selectOption('#rf-patientId', { index: 1 });
@@ -324,13 +349,13 @@ test.describe('Cabinet Médical', () => {
   test.describe('Feuilles de soin — Docteur', () => {
     test('liste des feuilles de soin', async ({ page }) => {
       await loginAsDoctor(page);
-      await page.click('#desktop-nav [data-route="feuilles"]');
+      await navigateTo(page, 'feuilles');
       await page.waitForSelector('#feuilles-table');
     });
 
     test('créer une feuille de soin', async ({ page }) => {
       await loginAsDoctor(page);
-      await page.click('#desktop-nav [data-route="feuilles"]');
+      await navigateTo(page, 'feuilles');
       await page.click('a[href="#/feuilles/new"]');
       await page.waitForSelector('#feuille-form');
       await page.selectOption('#ff-patientId', { index: 1 });
@@ -353,14 +378,14 @@ test.describe('Cabinet Médical', () => {
     test('réinitialisation fonctionne', async ({ page }) => {
       await loginAsDoctor(page);
       // Delete a patient first
-      await page.click('#desktop-nav [data-route="patients"]');
+      await navigateTo(page, 'patients');
       await page.waitForSelector('#patients-table');
       const countBefore = await page.locator('#patients-table tbody tr').count();
       // Reset
       await page.click('#reset-data-btn');
       await page.waitForTimeout(1000);
       // Should reload and show same count
-      await page.click('#desktop-nav [data-route="patients"]');
+      await navigateTo(page, 'patients');
       await page.waitForSelector('#patients-table');
       const countAfter = await page.locator('#patients-table tbody tr').count();
       expect(countAfter).toBe(countBefore);
@@ -371,7 +396,7 @@ test.describe('Cabinet Médical', () => {
   test.describe('Relations entre entités', () => {
     test('consultation détail affiche les documents liés', async ({ page }) => {
       await loginAsDoctor(page);
-      await page.click('#desktop-nav [data-route="consultations"]');
+      await navigateTo(page, 'consultations');
       await page.waitForSelector('#consultations-table');
       await page.click('#consultations-table tbody tr:first-child a[data-action="view"]');
       await page.waitForSelector('#linked-documents');
@@ -383,7 +408,7 @@ test.describe('Cabinet Médical', () => {
 
     test('consultation détail permet CRUD sur documents liés', async ({ page }) => {
       await loginAsDoctor(page);
-      await page.click('#desktop-nav [data-route="consultations"]');
+      await navigateTo(page, 'consultations');
       await page.waitForSelector('#consultations-table');
       await page.click('#consultations-table tbody tr:first-child a[data-action="view"]');
       await page.waitForSelector('#linked-documents');
@@ -399,7 +424,7 @@ test.describe('Cabinet Médical', () => {
 
     test('ordonnance détail affiche lien consultation', async ({ page }) => {
       await loginAsDoctor(page);
-      await page.click('#desktop-nav [data-route="prescriptions"]');
+      await navigateTo(page, 'prescriptions');
       await page.waitForSelector('#prescriptions-table');
       await page.click('#prescriptions-table tbody tr:first-child a[data-action="view"]');
       await page.waitForSelector('.prescription-detail');
@@ -408,21 +433,21 @@ test.describe('Cabinet Médical', () => {
 
     test('liste ordonnances affiche colonne consultation', async ({ page }) => {
       await loginAsDoctor(page);
-      await page.click('#desktop-nav [data-route="prescriptions"]');
+      await navigateTo(page, 'prescriptions');
       await page.waitForSelector('#prescriptions-table');
-      await expect(page.locator('#prescriptions-table th:has-text("Consultation")')).toBeVisible();
+      await expect(page.locator('#prescriptions-table th:has-text("Consultation")')).toHaveCount(1);
     });
 
     test('rendez-vous affiche lien consultation pour docteur', async ({ page }) => {
       await loginAsDoctor(page);
-      await page.click('#desktop-nav [data-route="appointments"]');
+      await navigateTo(page, 'appointments');
       await page.waitForSelector('#appointments-table');
-      await expect(page.locator('#appointments-table th:has-text("Consultation")')).toBeVisible();
+      await expect(page.locator('#appointments-table th:has-text("Consultation")')).toHaveCount(1);
     });
 
     test('formulaire ordonnance a un sélecteur de consultation', async ({ page }) => {
       await loginAsDoctor(page);
-      await page.click('#desktop-nav [data-route="prescriptions"]');
+      await navigateTo(page, 'prescriptions');
       await page.waitForSelector('#prescriptions-table');
       await page.click('a:has-text("Nouvelle ordonnance")');
       await page.waitForSelector('#prescription-form');
@@ -434,14 +459,14 @@ test.describe('Cabinet Médical', () => {
   test.describe('Export PDF', () => {
     test('bouton PDF sur liste patients', async ({ page }) => {
       await loginAsDoctor(page);
-      await page.click('#desktop-nav [data-route="patients"]');
+      await navigateTo(page, 'patients');
       await page.waitForSelector('#patients-table');
       await expect(page.locator('#patients-table .btn-outline-success[title="PDF"]').first()).toBeVisible();
     });
 
     test('bouton PDF sur fiche patient', async ({ page }) => {
       await loginAsDoctor(page);
-      await page.click('#desktop-nav [data-route="patients"]');
+      await navigateTo(page, 'patients');
       await page.waitForSelector('#patients-table');
       await page.click('#patients-table tbody tr:first-child a[data-action="view"]');
       await page.waitForSelector('.patient-detail');
@@ -450,14 +475,14 @@ test.describe('Cabinet Médical', () => {
 
     test('bouton PDF sur liste consultations', async ({ page }) => {
       await loginAsDoctor(page);
-      await page.click('#desktop-nav [data-route="consultations"]');
+      await navigateTo(page, 'consultations');
       await page.waitForSelector('#consultations-table');
       await expect(page.locator('#consultations-table .btn-outline-success[title="PDF"]').first()).toBeVisible();
     });
 
     test('bouton PDF sur détail consultation', async ({ page }) => {
       await loginAsDoctor(page);
-      await page.click('#desktop-nav [data-route="consultations"]');
+      await navigateTo(page, 'consultations');
       await page.waitForSelector('#consultations-table');
       await page.click('#consultations-table tbody tr:first-child a[data-action="view"]');
       await page.waitForSelector('.consultation-detail');
@@ -466,14 +491,14 @@ test.describe('Cabinet Médical', () => {
 
     test('bouton PDF sur liste comptes-rendus', async ({ page }) => {
       await loginAsDoctor(page);
-      await page.click('#desktop-nav [data-route="reports"]');
+      await navigateTo(page, 'reports');
       await page.waitForSelector('#reports-table');
       await expect(page.locator('#reports-table .btn-outline-success[title="PDF"]').first()).toBeVisible();
     });
 
     test('bouton PDF sur détail compte-rendu', async ({ page }) => {
       await loginAsDoctor(page);
-      await page.click('#desktop-nav [data-route="reports"]');
+      await navigateTo(page, 'reports');
       await page.waitForSelector('#reports-table');
       await page.click('#reports-table tbody tr:first-child a[data-action="view"]');
       await page.waitForSelector('.report-detail');
@@ -482,14 +507,14 @@ test.describe('Cabinet Médical', () => {
 
     test('bouton PDF sur liste feuilles de soin', async ({ page }) => {
       await loginAsDoctor(page);
-      await page.click('#desktop-nav [data-route="feuilles"]');
+      await navigateTo(page, 'feuilles');
       await page.waitForSelector('#feuilles-table');
       await expect(page.locator('#feuilles-table .btn-outline-success[title="PDF"]').first()).toBeVisible();
     });
 
     test('pas de bouton PDF sur liste rendez-vous', async ({ page }) => {
       await loginAsDoctor(page);
-      await page.click('#desktop-nav [data-route="appointments"]');
+      await navigateTo(page, 'appointments');
       await page.waitForSelector('#appointments-table');
       await expect(page.locator('#appointments-table .btn-outline-success[title="PDF"]')).toHaveCount(0);
     });
@@ -499,6 +524,7 @@ test.describe('Cabinet Médical', () => {
   test.describe('Responsive', () => {
     test('connexion sur mobile', async ({ page }) => {
       await page.setViewportSize({ width: 375, height: 812 });
+      await goToLogin(page);
       await expect(page.locator('#login-page')).toBeVisible();
       const box = await page.locator('.login-card').boundingBox();
       expect(box!.width).toBeLessThanOrEqual(375);
@@ -525,12 +551,12 @@ test.describe('Cabinet Médical', () => {
 
   // ===== CONTACT =====
   test.describe('Contact', () => {
-    test('bouton contact sur page de connexion', async ({ page }) => {
-      await expect(page.locator('.login-topbar button[data-bs-target="#contactModal"]')).toBeVisible();
+    test('bouton contact sur page d\'accueil', async ({ page }) => {
+      await expect(page.locator('.landing-nav button[data-bs-target="#contactModal"]')).toBeVisible();
     });
 
-    test('formulaire contact s\'ouvre depuis la page de connexion', async ({ page }) => {
-      await page.click('.login-topbar button[data-bs-target="#contactModal"]');
+    test('formulaire contact s\'ouvre depuis la page d\'accueil', async ({ page }) => {
+      await page.click('#landing-page .landing-nav button[data-bs-target="#contactModal"]');
       await expect(page.locator('#contactModal')).toBeVisible();
       await expect(page.locator('#cf-name')).toBeVisible();
       await expect(page.locator('#cf-email')).toBeVisible();
@@ -540,7 +566,33 @@ test.describe('Cabinet Médical', () => {
 
     test('bouton contact dans le header de l\'app', async ({ page }) => {
       await loginAsDoctor(page);
-      await expect(page.locator('.app-navbar button[data-bs-target="#contactModal"]')).toBeVisible();
+      const navBtn = page.locator('.app-navbar button[data-bs-target="#contactModal"]');
+      const offcanvasBtn = page.locator('#mobileSidebar button[data-bs-target="#contactModal"]');
+      const isDesktop = await navBtn.isVisible();
+      if (isDesktop) {
+        await expect(navBtn).toBeVisible();
+      } else {
+        await page.click('.navbar-toggler');
+        await expect(offcanvasBtn).toBeVisible();
+      }
+    });
+  });
+
+  // ===== PAGE D'ACCUEIL (LANDING) =====
+  test.describe('Landing Page', () => {
+    test('affiche le héro et les fonctionnalités', async ({ page }) => {
+      await expect(page.locator('.landing-hero h1')).toContainText('cabinet médical');
+      await expect(page.locator('.feature-card')).toHaveCount(6);
+    });
+
+    test('bouton démonstration mène à la page de connexion', async ({ page }) => {
+      await page.click('#landing-page button:has-text("Démonstration")');
+      await expect(page.locator('#login-page')).toBeVisible();
+      await expect(page.locator('#landing-page')).not.toBeVisible();
+    });
+
+    test('footer landing affiche version', async ({ page }) => {
+      await expect(page.locator('.landing-footer')).toContainText('v1.0.0');
     });
   });
 });

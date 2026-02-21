@@ -8,9 +8,32 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
   <style>
     :root { --sidebar-w: 220px; --brand-color: #1a73e8; --brand-dark: #0d47a1; }
-    body { background: #f0f2f5; }
+    body { background: #f0f2f5; margin: 0; }
+    /* Landing page */
+    #landing-page { display: block; }
+    .landing-nav { background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,.08); }
+    .landing-nav .navbar-brand { font-weight: 700; color: var(--brand-color) !important; font-size: 1.2rem; }
+    .landing-hero {
+      background: linear-gradient(135deg, var(--brand-color) 0%, var(--brand-dark) 100%);
+      color: #fff; padding: 5rem 1rem 4rem; text-align: center;
+    }
+    .landing-hero h1 { font-weight: 800; font-size: 2.5rem; margin-bottom: 1rem; }
+    .landing-hero p.lead { font-size: 1.2rem; opacity: .9; max-width: 650px; margin: 0 auto 2rem; }
+    .feature-card { text-align: center; padding: 1.5rem; border-radius: 1rem; transition: transform .2s, box-shadow .2s; border: 1px solid #e9ecef; height: 100%; }
+    .feature-card:hover { transform: translateY(-4px); box-shadow: 0 8px 24px rgba(0,0,0,.08); }
+    .feature-icon-lg { width: 64px; height: 64px; border-radius: 1rem; display: inline-flex; align-items: center; justify-content: center; font-size: 1.6rem; color: #fff; margin-bottom: 1rem; }
+    .advantage-item { display: flex; align-items: flex-start; gap: 1rem; margin-bottom: 1.5rem; }
+    .advantage-item .bi { font-size: 1.5rem; color: var(--brand-color); flex-shrink: 0; margin-top: .15rem; }
+    .cta-section { background: linear-gradient(135deg, var(--brand-color), var(--brand-dark)); color: #fff; padding: 3rem 1rem; text-align: center; }
+    .landing-footer { background: #1a1a2e; color: rgba(255,255,255,.6); padding: 1.5rem; text-align: center; font-size: .8rem; }
+    @media (max-width: 767.98px) {
+      .landing-hero h1 { font-size: 1.7rem; }
+      .landing-hero { padding: 3rem 1rem 2.5rem; }
+      .landing-hero p.lead { font-size: 1rem; }
+    }
+    /* Login page */
     #login-page {
-      min-height: 100vh; display: flex; align-items: center; justify-content: center;
+      min-height: 100vh; display: none; align-items: center; justify-content: center;
       background: linear-gradient(135deg, #1a73e8 0%, #0d47a1 100%);
       position: relative;
     }
@@ -89,6 +112,138 @@
   </style>
 </head>
 <body>
+
+<!-- ===== LANDING PAGE ===== -->
+<div id="landing-page">
+  <nav class="navbar navbar-expand-sm landing-nav sticky-top">
+    <div class="container">
+      <a class="navbar-brand" href="#"><i class="bi bi-hospital me-2"></i>CareFlow</a>
+      <div class="d-flex gap-2">
+        <button class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#contactModal"><i class="bi bi-envelope me-1"></i>Contact</button>
+        <button class="btn btn-primary btn-sm" onclick="showLogin()"><i class="bi bi-play-circle me-1"></i>Démonstration</button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <section class="landing-hero">
+    <div class="container">
+      <h1>Gérez votre cabinet médical<br>en toute simplicité</h1>
+      <p class="lead">La solution complète et intuitive conçue pour les médecins au Maroc. Dossiers patients, consultations, ordonnances, feuilles de soin — tout dans une seule application.</p>
+      <div class="d-flex justify-content-center gap-3 flex-wrap">
+        <button class="btn btn-light btn-lg px-4" onclick="showLogin()"><i class="bi bi-play-circle me-1"></i>Essayer la démo</button>
+        <button class="btn btn-outline-light btn-lg px-4" data-bs-toggle="modal" data-bs-target="#contactModal"><i class="bi bi-telephone me-1"></i>Nous contacter</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Features -->
+  <section class="py-5" style="background:#fff">
+    <div class="container">
+      <h2 class="text-center fw-bold mb-2">Tout ce dont votre cabinet a besoin</h2>
+      <p class="text-center text-muted mb-5">Une plateforme unique pour digitaliser votre pratique quotidienne</p>
+      <div class="row g-4">
+        <div class="col-md-4 col-sm-6">
+          <div class="feature-card">
+            <div class="feature-icon-lg" style="background:linear-gradient(135deg,#28a745,#20c997)"><i class="bi bi-people"></i></div>
+            <h5>Dossiers patients</h5>
+            <p class="text-muted small mb-0">Fiches complètes avec antécédents, allergies, mutuelle et historique des consultations. Recherche instantanée.</p>
+          </div>
+        </div>
+        <div class="col-md-4 col-sm-6">
+          <div class="feature-card">
+            <div class="feature-icon-lg" style="background:linear-gradient(135deg,#1a73e8,#0d47a1)"><i class="bi bi-clipboard2-pulse"></i></div>
+            <h5>Consultations</h5>
+            <p class="text-muted small mb-0">Saisie rapide du motif, examen clinique, diagnostic et signes vitaux. Historique complet par patient.</p>
+          </div>
+        </div>
+        <div class="col-md-4 col-sm-6">
+          <div class="feature-card">
+            <div class="feature-icon-lg" style="background:linear-gradient(135deg,#fd7e14,#e74c3c)"><i class="bi bi-file-earmark-medical"></i></div>
+            <h5>Ordonnances</h5>
+            <p class="text-muted small mb-0">Créez vos ordonnances en quelques clics. Export PDF prêt à imprimer avec en-tête personnalisé.</p>
+          </div>
+        </div>
+        <div class="col-md-4 col-sm-6">
+          <div class="feature-card">
+            <div class="feature-icon-lg" style="background:linear-gradient(135deg,#6f42c1,#e83e8c)"><i class="bi bi-calendar-event"></i></div>
+            <h5>Rendez-vous</h5>
+            <p class="text-muted small mb-0">Planning des rendez-vous avec suivi des statuts. Votre assistante gère l'agenda, vous vous concentrez sur vos patients.</p>
+          </div>
+        </div>
+        <div class="col-md-4 col-sm-6">
+          <div class="feature-card">
+            <div class="feature-icon-lg" style="background:linear-gradient(135deg,#17a2b8,#0dcaf0)"><i class="bi bi-journal-medical"></i></div>
+            <h5>Comptes-rendus</h5>
+            <p class="text-muted small mb-0">Rédigez certificats médicaux, bilans et lettres. Export PDF professionnel en un clic.</p>
+          </div>
+        </div>
+        <div class="col-md-4 col-sm-6">
+          <div class="feature-card">
+            <div class="feature-icon-lg" style="background:linear-gradient(135deg,#ffc107,#ff9800)"><i class="bi bi-receipt"></i></div>
+            <h5>Feuilles de soin</h5>
+            <p class="text-muted small mb-0">Génération automatique avec codes CNSS/CNOPS. Calcul des montants et suivi tiers payant.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Advantages -->
+  <section class="py-5" style="background:#f8f9fa">
+    <div class="container">
+      <div class="row align-items-center">
+        <div class="col-md-5 mb-4 mb-md-0 text-center">
+          <div style="font-size:6rem;color:var(--brand-color)"><i class="bi bi-shield-check"></i></div>
+          <h3 class="fw-bold">Pourquoi choisir CareFlow ?</h3>
+          <p class="text-muted">Conçu par des professionnels qui comprennent le quotidien d'un cabinet médical au Maroc.</p>
+        </div>
+        <div class="col-md-7">
+          <div class="advantage-item">
+            <i class="bi bi-lightning-charge-fill"></i>
+            <div><strong>Prise en main immédiate</strong><br><span class="text-muted small">Interface intuitive en français. Aucune formation requise, votre assistante sera opérationnelle dès le premier jour.</span></div>
+          </div>
+          <div class="advantage-item">
+            <i class="bi bi-phone"></i>
+            <div><strong>Accessible partout</strong><br><span class="text-muted small">Fonctionne sur ordinateur, tablette et smartphone. Consultez les dossiers patients depuis votre téléphone entre deux visites.</span></div>
+          </div>
+          <div class="advantage-item">
+            <i class="bi bi-people-fill"></i>
+            <div><strong>Gestion des rôles</strong><br><span class="text-muted small">L'assistante gère les patients et les rendez-vous. Le médecin accède aux consultations et ordonnances. Chacun son périmètre.</span></div>
+          </div>
+          <div class="advantage-item">
+            <i class="bi bi-file-pdf"></i>
+            <div><strong>Documents PDF professionnels</strong><br><span class="text-muted small">Ordonnances, feuilles de soin et comptes-rendus exportés en PDF avec votre en-tête. Prêts à imprimer ou envoyer.</span></div>
+          </div>
+          <div class="advantage-item">
+            <i class="bi bi-flag"></i>
+            <div><strong>Adapté au contexte marocain</strong><br><span class="text-muted small">Codes actes CNSS/CNOPS, format d'ordonnance local, gestion tiers payant, mutuelles marocaines.</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="cta-section">
+    <div class="container">
+      <h2 class="fw-bold mb-3">Prêt à moderniser votre cabinet ?</h2>
+      <p class="mb-4" style="opacity:.9;font-size:1.1rem">Découvrez l'application gratuitement avec notre démonstration interactive.<br>Aucune inscription requise.</p>
+      <div class="d-flex justify-content-center gap-3 flex-wrap">
+        <button class="btn btn-light btn-lg px-4" onclick="showLogin()"><i class="bi bi-play-circle me-1"></i>Lancer la démonstration</button>
+        <button class="btn btn-outline-light btn-lg px-4" data-bs-toggle="modal" data-bs-target="#contactModal"><i class="bi bi-envelope me-1"></i>Demander une présentation</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="landing-footer">
+    <div class="container">
+      <p class="mb-1"><i class="bi bi-hospital me-1"></i><strong>CareFlow</strong> — Gestion de Cabinet Médical</p>
+      <p class="mb-0">v1.0.0 — 20/02/2026 à 13:57</p>
+    </div>
+  </footer>
+</div>
 
 <!-- ===== LOGIN PAGE ===== -->
 <div id="login-page">
@@ -342,12 +497,20 @@ async function seedDatabase() {
 // ========================================================================
 // AUTH
 // ========================================================================
+function showLanding() {
+  document.getElementById('landing-page').style.display = 'block';
+  document.getElementById('login-page').style.display = 'none';
+  document.getElementById('app-shell').style.display = 'none';
+}
+
 function showLogin() {
+  document.getElementById('landing-page').style.display = 'none';
   document.getElementById('login-page').style.display = 'flex';
   document.getElementById('app-shell').style.display = 'none';
 }
 
 function showApp() {
+  document.getElementById('landing-page').style.display = 'none';
   document.getElementById('login-page').style.display = 'none';
   document.getElementById('app-shell').style.display = 'block';
   const roleLabel = currentUser.role === 'doctor' ? 'Docteur' : 'Assistante';
@@ -374,7 +537,7 @@ function logoutUser() {
   currentUser = null;
   sessionStorage.removeItem('cabinetUser');
   location.hash = '';
-  showLogin();
+  showLanding();
 }
 
 function isDoctor() { return currentUser && currentUser.role === 'doctor'; }
@@ -435,7 +598,7 @@ function getRoute() {
 }
 
 async function handleRoute() {
-  if (!currentUser) { showLogin(); return; }
+  if (!currentUser) { showLanding(); return; }
   const route = getRoute();
   if (DOCTOR_ROUTES.includes(route.section) && !isDoctor()) {
     location.hash = '#/dashboard';
@@ -1727,10 +1890,10 @@ async function init() {
       currentUser = user;
       showApp();
     } else {
-      showLogin();
+      showLanding();
     }
   } else {
-    showLogin();
+    showLanding();
   }
 
   // Login form
