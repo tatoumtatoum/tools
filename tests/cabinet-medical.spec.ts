@@ -522,4 +522,25 @@ test.describe('Cabinet Médical', () => {
       await expect(page.locator('.app-footer')).toContainText('20/02/2026 à 13:57');
     });
   });
+
+  // ===== CONTACT =====
+  test.describe('Contact', () => {
+    test('bouton contact sur page de connexion', async ({ page }) => {
+      await expect(page.locator('.login-topbar button[data-bs-target="#contactModal"]')).toBeVisible();
+    });
+
+    test('formulaire contact s\'ouvre depuis la page de connexion', async ({ page }) => {
+      await page.click('.login-topbar button[data-bs-target="#contactModal"]');
+      await expect(page.locator('#contactModal')).toBeVisible();
+      await expect(page.locator('#cf-name')).toBeVisible();
+      await expect(page.locator('#cf-email')).toBeVisible();
+      await expect(page.locator('#cf-phone')).toBeVisible();
+      await expect(page.locator('#cf-specialty')).toBeVisible();
+    });
+
+    test('bouton contact dans le header de l\'app', async ({ page }) => {
+      await loginAsDoctor(page);
+      await expect(page.locator('.app-navbar button[data-bs-target="#contactModal"]')).toBeVisible();
+    });
+  });
 });

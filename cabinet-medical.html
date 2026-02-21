@@ -83,12 +83,18 @@
       .card-body { padding: .75rem; }
       .row.g-3 > [class*="col-"] { margin-bottom: .25rem; }
     }
+    /* Contact/marketing styles */
+    .login-topbar { position: absolute; top: 0; left: 0; right: 0; z-index: 10; padding: .75rem 1rem; display: flex; justify-content: flex-end; gap: .5rem; }
+    .login-topbar .btn { font-size: .85rem; backdrop-filter: blur(4px); }
   </style>
 </head>
 <body>
 
 <!-- ===== LOGIN PAGE ===== -->
 <div id="login-page">
+  <div class="login-topbar">
+    <button class="btn btn-outline-light btn-sm" data-bs-toggle="modal" data-bs-target="#contactModal"><i class="bi bi-envelope me-1"></i>Contact</button>
+  </div>
   <div class="login-card">
     <div class="text-center mb-4">
       <i class="bi bi-hospital fs-1 text-primary"></i>
@@ -132,7 +138,8 @@
         <span class="navbar-toggler-icon"></span>
       </button>
       <a class="navbar-brand" href="#/dashboard"><i class="bi bi-hospital"></i> Cabinet Médical</a>
-      <div class="d-flex align-items-center">
+      <div class="d-flex align-items-center gap-1">
+        <button class="btn btn-outline-light btn-sm d-none d-md-inline-block" data-bs-toggle="modal" data-bs-target="#contactModal" title="Contact"><i class="bi bi-envelope"></i></button>
         <span id="user-display" class="text-white me-2 small d-none d-sm-inline"></span>
         <button id="logout-btn" class="btn btn-outline-light btn-sm">
           <i class="bi bi-box-arrow-right"></i><span class="d-none d-sm-inline"> Déconnexion</span>
@@ -149,6 +156,9 @@
     </div>
     <div class="mobile-user-info" id="mobile-user-info"></div>
     <div class="offcanvas-body p-0" id="mobile-nav"></div>
+    <div class="p-2 border-top">
+      <button class="btn btn-outline-primary btn-sm w-100" data-bs-toggle="modal" data-bs-target="#contactModal" onclick="bootstrap.Offcanvas.getInstance(document.getElementById('mobileSidebar')).hide()"><i class="bi bi-envelope me-1"></i>Contact</button>
+    </div>
   </div>
 
   <!-- Desktop Sidebar -->
@@ -172,6 +182,58 @@
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
         <button type="button" class="btn btn-danger" id="confirmModalAction">Confirmer</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Contact Modal -->
+<div class="modal fade" id="contactModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header bg-primary text-white">
+        <h5 class="modal-title"><i class="bi bi-envelope-heart me-2"></i>Demande d'information</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted small mb-3">Vous êtes médecin et souhaitez en savoir plus sur Cabinet Médical ? Remplissez ce formulaire et nous vous recontacterons rapidement.</p>
+        <form id="contact-form">
+          <div class="mb-3">
+            <label class="form-label">Nom complet *</label>
+            <input type="text" class="form-control" id="cf-name" placeholder="Dr. Prénom Nom" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Email *</label>
+            <input type="email" class="form-control" id="cf-email" placeholder="votre@email.ma" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Téléphone</label>
+            <input type="tel" class="form-control" id="cf-phone" placeholder="+212 6 XX XX XX XX">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Ville</label>
+            <input type="text" class="form-control" id="cf-city" placeholder="Casablanca, Rabat, Marrakech...">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Spécialité</label>
+            <select class="form-select" id="cf-specialty">
+              <option value="">— Sélectionner —</option>
+              <option>Médecine générale</option>
+              <option>Pédiatrie</option>
+              <option>Gynécologie</option>
+              <option>Cardiologie</option>
+              <option>Dermatologie</option>
+              <option>ORL</option>
+              <option>Ophtalmologie</option>
+              <option>Autre</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Message</label>
+            <textarea class="form-control" id="cf-message" rows="3" placeholder="Décrivez vos besoins ou posez vos questions..."></textarea>
+          </div>
+          <button type="submit" class="btn btn-primary w-100"><i class="bi bi-send me-1"></i>Envoyer la demande</button>
+        </form>
       </div>
     </div>
   </div>
@@ -1614,6 +1676,32 @@ function generateFeuillePDF(feuille, patient) {
 
   doc.save(`feuille_${patient.lastName}_${dayjs(feuille.date).format('YYYYMMDD')}.pdf`);
 }
+
+// ========================================================================
+// CONTACT FORM
+// ========================================================================
+document.getElementById('contact-form').addEventListener('submit', function(e) {
+  e.preventDefault();
+  const name = document.getElementById('cf-name').value;
+  const email = document.getElementById('cf-email').value;
+  const phone = document.getElementById('cf-phone').value;
+  const city = document.getElementById('cf-city').value;
+  const specialty = document.getElementById('cf-specialty').value;
+  const message = document.getElementById('cf-message').value;
+  const body = [
+    `Nom : ${name}`,
+    `Email : ${email}`,
+    phone ? `Téléphone : ${phone}` : '',
+    city ? `Ville : ${city}` : '',
+    specialty ? `Spécialité : ${specialty}` : '',
+    '',
+    message || '(Pas de message)'
+  ].filter(Boolean).join('\n');
+  const subject = `Demande d'information — Cabinet Médical — ${name}`;
+  window.open(`mailto:contact-careflow@obecloud.org?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);
+  bootstrap.Modal.getInstance(document.getElementById('contactModal')).hide();
+  this.reset();
+});
 
 // ========================================================================
 // RESET DATABASE
