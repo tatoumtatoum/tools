@@ -326,8 +326,17 @@
       font-size: 16px;
       line-height: 1.8;
     }
+    .reader-toc {
+      transition: width 0.25s ease, padding 0.25s ease, opacity 0.2s ease;
+    }
+    .reader-toc.collapsed {
+      width: 0;
+      padding: 0;
+      opacity: 0;
+      border-right: none;
+      overflow: hidden;
+    }
     .reader-toc-toggle {
-      display: none;
       background: none;
       border: 1px solid #ddd;
       padding: 8px 14px;
@@ -622,7 +631,7 @@
       const id = h.id || text.toLowerCase().replace(/[^\w]+/g, '-').replace(/(^-|-$)/g, '');
       if (level > prevLevel) tocHTML += '<ul>'.repeat(level - prevLevel);
       else if (level < prevLevel) tocHTML += '</ul>'.repeat(prevLevel - level);
-      tocHTML += `<li><a href="#${id}" onclick="switchView('preview')">${text}</a></li>`;
+      tocHTML += `<li><a href="#${id}" onclick="event.preventDefault(); switchView('preview'); setTimeout(() => scrollToHeading('preview', '${id}'), 50);">${text}</a></li>`;
       prevLevel = level;
     });
     tocHTML += '</ul>'.repeat(prevLevel - minLevel + 1);
@@ -650,6 +659,8 @@
     if (!renderedHTML) { showToast('Nothing to read — convert some Markdown first'); return; }
     document.getElementById('readerBody').innerHTML = renderedHTML;
     buildReaderTOC();
+    const toc = document.getElementById('readerToc');
+    toc.classList.remove('collapsed', 'show');
     document.getElementById('readerMode').classList.add('active');
     document.body.style.overflow = 'hidden';
   }
@@ -669,14 +680,19 @@
     headings.forEach(h => {
       const id = h.id || '';
       const tag = h.tagName.toLowerCase();
-      html += `<li class="toc-${tag}"><a href="#${id}" onclick="document.getElementById('readerBody').querySelector('#${id}')?.scrollIntoView({behavior:'smooth'}); return false;">${h.textContent.trim()}</a></li>`;
+      html += `<li class="toc-${tag}"><a href="#${id}" onclick="event.preventDefault(); scrollToHeading('readerBody', '${id}'); if(window.matchMedia('(max-width:768px)').matches) document.getElementById('readerToc').classList.remove('show');">${h.textContent.trim()}</a></li>`;
     });
     html += '</ul>';
     readerToc.innerHTML = html;
   }
 
   function toggleReaderToc() {
-    document.getElementById('readerToc').classList.toggle('show');
+    const toc = document.getElementById('readerToc');
+    if (window.matchMedia('(max-width: 768px)').matches) {
+      toc.classList.toggle('show');
+    } else {
+      toc.classList.toggle('collapsed');
+    }
   }
 
   // Copy HTML
@@ -744,6 +760,27 @@ ${renderedHTML}
     setTimeout(() => t.classList.remove('show'), 2500);
   }
 
+  function scrollToHeading(containerId, headingId) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    const target = document.getElementById(headingId);
+    if (!target || !container.contains(target)) return;
+    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function syncEditorToPreview() {
+    if (currentView !== 'preview' || !renderedHTML) return;
+    const previewEl = document.getElementById('preview');
+    if (!previewEl || previewEl.scrollHeight <= previewEl.clientHeight) return;
+    const totalLines = editor.value.split('\n').length;
+    if (totalLines <= 1) return;
+    const cursorPos = editor.selectionStart;
+    const cursorLine = editor.value.substring(0, cursorPos).split('\n').length;
+    const ratio = (cursorLine - 1) / (totalLines - 1);
+    const scrollTarget = ratio * (previewEl.scrollHeight - previewEl.clientHeight);
+    previewEl.scrollTo({ top: scrollTarget, behavior: 'smooth' });
+  }
+
   function updateRateLimitDisplay() {
     const resetTime = rateLimit.reset !== '--' ? new Date(parseInt(rateLimit.reset) * 1000).toLocaleTimeString() : '--';
     document.getElementById('rateLimitInfo').textContent =
@@ -765,6 +802,13 @@ ${renderedHTML}
       editor.value = editor.value.substring(0, s) + '  ' + editor.value.substring(end);
       editor.selectionStart = editor.selectionEnd = s + 2;
     }
+  });
+
+  // Editor-to-preview scroll sync
+  editor.addEventListener('click', syncEditorToPreview);
+  editor.addEventListener('keyup', (e) => {
+    const navKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown'];
+    if (navKeys.includes(e.key)) syncEditorToPreview();
   });
 
   // Keyboard shortcuts
