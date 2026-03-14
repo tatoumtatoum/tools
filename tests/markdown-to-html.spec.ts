@@ -4,7 +4,7 @@ test.describe('Markdown to HTML Converter', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/markdown-to-html.html');
     // Wait for marked.js to load and initial render
-    await page.waitForFunction(() => typeof (window as any).marked !== 'undefined', { timeout: 10000 });
+    await page.waitForFunction(() => typeof (window as any).renderMarkdown === 'function', { timeout: 10000 });
   });
 
   test.describe('Page Load', () => {
@@ -241,6 +241,85 @@ test.describe('Markdown to HTML Converter', () => {
       await tocTab.click();
       await expect(tocTab).toHaveClass(/active/);
       await expect(previewTab).not.toHaveClass(/active/);
+    });
+  });
+
+  test.describe('TOC Navigation & Scroll Sync', () => {
+    const fillerParagraphs = Array.from({ length: 40 }, (_, i) => `<p>Filler paragraph ${i + 1} with enough text to take up space in the preview panel and ensure scrolling is required.</p>`).join('\n');
+    const mockHTML = `<h1 id="title">Title</h1>\n${fillerParagraphs}\n<h2 id="section-two">Section Two</h2>\n${fillerParagraphs}\n<h2 id="section-three">Section Three</h2>\n${fillerParagraphs}`;
+
+    const fillerLines = Array.from({ length: 40 }, (_, i) => `Filler paragraph ${i + 1} with enough text to take up space in the preview panel and ensure scrolling is required.\n`).join('\n');
+    const editorContent = `# Title\n\n${fillerLines}\n## Section Two\n\n${fillerLines}\n## Section Three\n\n${fillerLines}`;
+
+    test.beforeEach(async ({ page }) => {
+      // Route must be set before navigation so the initial renderMarkdown call is mocked
+      await page.route('https://api.github.com/markdown', route =>
+        route.fulfill({ status: 200, contentType: 'text/html', body: mockHTML })
+      );
+      await page.goto('/markdown-to-html.html');
+      await page.waitForFunction(() => typeof (window as any).renderMarkdown === 'function', { timeout: 10000 });
+      const editor = page.locator('#editor');
+      await editor.fill(editorContent);
+      await expect(page.locator('#preview h2')).toHaveCount(2, { timeout: 10000 });
+    });
+
+    test('TOC link click scrolls preview to the heading', async ({ page }) => {
+      await page.locator('[data-view="toc"]').click();
+      await expect(page.locator('#toc')).toBeVisible();
+      await page.locator('#toc a', { hasText: 'Section Three' }).click();
+
+      await expect.poll(async () => {
+        return page.evaluate(() => {
+          const preview = document.getElementById('preview')!;
+          const heading = preview.querySelector('#section-three')!;
+          if (!heading) return false;
+          const previewRect = preview.getBoundingClientRect();
+          const headingRect = heading.getBoundingClientRect();
+          return headingRect.top >= previewRect.top && headingRect.top <= previewRect.bottom;
+        });
+      }, { timeout: 3000 }).toBeTruthy();
+    });
+
+    test('TOC link click scrolls editor to the heading source line', async ({ page }) => {
+      await page.locator('[data-view="toc"]').click();
+      await expect(page.locator('#toc')).toBeVisible();
+      await page.locator('#toc a', { hasText: 'Section Three' }).click();
+
+      await expect.poll(async () => {
+        return page.locator('#editor').evaluate((el: HTMLTextAreaElement) => el.scrollTop);
+      }, { timeout: 3000 }).toBeGreaterThan(0);
+    });
+
+    test('Reader mode TOC click scrolls reader body to heading', async ({ page }) => {
+      await page.locator('button[title="Reader mode"]').click();
+      await expect(page.locator('#readerMode')).toHaveClass(/active/);
+
+      await page.locator('#readerToc a', { hasText: 'Section Three' }).click();
+
+      await expect.poll(async () => {
+        return page.evaluate(() => {
+          const body = document.getElementById('readerBody')!;
+          const heading = body.querySelector('#section-three')!;
+          if (!heading) return false;
+          const bodyRect = body.getBoundingClientRect();
+          const headingRect = heading.getBoundingClientRect();
+          return headingRect.top >= bodyRect.top && headingRect.top <= bodyRect.bottom;
+        });
+      }, { timeout: 3000 }).toBeTruthy();
+    });
+
+    test('Clicking near bottom of editor scrolls preview down', async ({ page }) => {
+      // Ensure preview starts at top
+      await page.evaluate(() => document.getElementById('preview')!.scrollTop = 0);
+
+      // Click near the bottom of the editor textarea
+      const editor = page.locator('#editor');
+      const box = await editor.boundingBox();
+      await editor.click({ position: { x: box!.width / 2, y: box!.height - 10 } });
+
+      await expect.poll(async () => {
+        return page.evaluate(() => document.getElementById('preview')!.scrollTop);
+      }, { timeout: 3000 }).toBeGreaterThan(0);
     });
   });
 

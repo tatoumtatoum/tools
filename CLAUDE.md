@@ -38,5 +38,34 @@ Tests live in `tests/` as Playwright spec files (TypeScript). Each tool has a co
 ## Key Conventions
 
 - No build/transpile step — edit the HTML file directly and refresh
-- Mobile-responsive: all tools must work on mobile viewports (media queries at 768px and 400px breakpoints)
 - Tools should work offline where possible (Service Worker caching)
+
+## Rules
+### implementation
+- No React/Angular/Vue — just vanilla JS, HTML, and CSS
+- Load dependencies from a CDN. The fewer dependencies the better, but if there’s a well known library that helps solve a problem I’m happy to load it from CDNjs or jsdelivr or similar.
+
+### Responsive Design
+All UI must support both mobile and desktop.
+
+Guidelines:
+- Mobile-first design
+- Use responsive layouts
+- Avoid fixed widths
+- Ensure touch-friendly components
+- Maintain consistent spacing
+- Avoid horizontal scrolling on mobile.
+
+Breakpoints:
+- Mobile: <640px
+- Tablet: 640–1024px
+- Desktop: >1024px
+
+### Testing
+- Use red/green TDD for all new features and bug fixes.
+- All new features require unit tests (Vitest) and E2E tests .
+- Update/add E2E tests if required.
+- Run tests locally before pushing changes. 
+
+### Deployment
+- Commit and push all changes to GitHub after successful tests.

@@ -769,8 +769,10 @@ ${renderedHTML}
     if (!container) return;
     const target = container.querySelector('[id="' + CSS.escape(headingId) + '"]');
     if (!target) return;
-    const offset = target.offsetTop - container.offsetTop;
-    container.scrollTo({ top: Math.max(0, offset - container.clientHeight / 3), behavior: 'smooth' });
+    const containerRect = container.getBoundingClientRect();
+    const targetRect = target.getBoundingClientRect();
+    const scrollOffset = targetRect.top - containerRect.top + container.scrollTop;
+    container.scrollTo({ top: Math.max(0, scrollOffset - container.clientHeight / 3), behavior: 'smooth' });
   }
 
   function scrollEditorToHeading(level, text) {
@@ -795,7 +797,7 @@ ${renderedHTML}
     if (!h) return;
     scrollEditorToHeading(h.level, h.text);
     switchView('preview');
-    requestAnimationFrame(() => scrollToHeading('preview', h.id));
+    requestAnimationFrame(() => requestAnimationFrame(() => scrollToHeading('preview', h.id)));
   }
 
   function syncEditorToPreview() {
@@ -828,17 +830,24 @@ ${renderedHTML}
       if (editorHeadings[i].line <= cursorLine) { prevIdx = i; break; }
     }
 
+    const previewRect = previewEl.getBoundingClientRect();
+
+    function headingScrollPos(heading) {
+      const headingRect = heading.getBoundingClientRect();
+      return headingRect.top - previewRect.top + previewEl.scrollTop;
+    }
+
     if (prevIdx === -1) {
       // Before first heading
       const firstLine = editorHeadings[0].line;
       const ratio = firstLine > 0 ? cursorLine / firstLine : 0;
-      const targetTop = ratio * previewHeadings[0].offsetTop;
+      const targetTop = ratio * headingScrollPos(previewHeadings[0]);
       previewEl.scrollTo({ top: targetTop, behavior: 'smooth' });
       return;
     }
 
     const pIdx = Math.min(prevIdx, previewHeadings.length - 1);
-    let scrollTarget = previewHeadings[pIdx].offsetTop;
+    let scrollTarget = headingScrollPos(previewHeadings[pIdx]);
 
     // Interpolate between current and next heading
     const nextEditor = editorHeadings[prevIdx + 1];
@@ -846,7 +855,7 @@ ${renderedHTML}
     if (nextEditor && nextPreview) {
       const editorRange = nextEditor.line - editorHeadings[prevIdx].line;
       const progress = editorRange > 0 ? (cursorLine - editorHeadings[prevIdx].line) / editorRange : 0;
-      scrollTarget += progress * (nextPreview.offsetTop - previewHeadings[pIdx].offsetTop);
+      scrollTarget += progress * (headingScrollPos(nextPreview) - headingScrollPos(previewHeadings[pIdx]));
     }
 
     previewEl.scrollTo({ top: scrollTarget, behavior: 'smooth' });
