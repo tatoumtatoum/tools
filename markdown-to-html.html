@@ -767,9 +767,10 @@ ${renderedHTML}
   function scrollToHeading(containerId, headingId) {
     const container = document.getElementById(containerId);
     if (!container) return;
-    const target = document.getElementById(headingId);
-    if (!target || !container.contains(target)) return;
-    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const target = container.querySelector('[id="' + CSS.escape(headingId) + '"]');
+    if (!target) return;
+    const offset = target.offsetTop - container.offsetTop;
+    container.scrollTo({ top: Math.max(0, offset - container.clientHeight / 3), behavior: 'smooth' });
   }
 
   function scrollEditorToHeading(level, text) {
@@ -782,7 +783,7 @@ ${renderedHTML}
         editor.focus();
         editor.selectionStart = editor.selectionEnd = charPos;
         const lineHeight = parseFloat(getComputedStyle(editor).lineHeight);
-        editor.scrollTop = Math.max(0, i * lineHeight - editor.clientHeight / 3);
+        editor.scrollTop = Math.max(0, i * lineHeight - editor.clientHeight / 2);
         return;
       }
       charPos += lines[i].length + 1;
@@ -794,7 +795,7 @@ ${renderedHTML}
     if (!h) return;
     scrollEditorToHeading(h.level, h.text);
     switchView('preview');
-    setTimeout(() => scrollToHeading('preview', h.id), 50);
+    requestAnimationFrame(() => scrollToHeading('preview', h.id));
   }
 
   function syncEditorToPreview() {
