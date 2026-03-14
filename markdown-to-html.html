@@ -506,6 +506,7 @@
   let renderedHTML = '';
   let debounceTimer = null;
   let rateLimit = { remaining: '--', limit: '--', reset: '--' };
+  let tocHeadings = [];
 
   // DOM refs
   const editor = document.getElementById('editor');
@@ -624,14 +625,17 @@
     const minLevel = Math.min(...Array.from(headings).map(h => parseInt(h.tagName[1])));
     let tocHTML = '<h3>📑 Table of Contents</h3><ul>';
     let prevLevel = minLevel;
+    tocHeadings = [];
 
     headings.forEach(h => {
       const level = parseInt(h.tagName[1]);
       const text = h.textContent.trim();
       const id = h.id || text.toLowerCase().replace(/[^\w]+/g, '-').replace(/(^-|-$)/g, '');
+      const idx = tocHeadings.length;
+      tocHeadings.push({ level, text, id });
       if (level > prevLevel) tocHTML += '<ul>'.repeat(level - prevLevel);
       else if (level < prevLevel) tocHTML += '</ul>'.repeat(prevLevel - level);
-      tocHTML += `<li><a href="#${id}" onclick="event.preventDefault(); switchView('preview'); setTimeout(() => scrollToHeading('preview', '${id}'), 50);">${text}</a></li>`;
+      tocHTML += `<li><a href="#${id}" onclick="event.preventDefault(); navigateToHeading(${idx});">${text}</a></li>`;
       prevLevel = level;
     });
     tocHTML += '</ul>'.repeat(prevLevel - minLevel + 1);
@@ -768,16 +772,82 @@ ${renderedHTML}
     target.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
+  function scrollEditorToHeading(level, text) {
+    const prefix = '#'.repeat(level) + ' ';
+    const lines = editor.value.split('\n');
+    let charPos = 0;
+    for (let i = 0; i < lines.length; i++) {
+      const trimmed = lines[i].trimStart();
+      if (trimmed.startsWith(prefix) && trimmed.substring(prefix.length).trim() === text) {
+        editor.focus();
+        editor.selectionStart = editor.selectionEnd = charPos;
+        const lineHeight = parseFloat(getComputedStyle(editor).lineHeight);
+        editor.scrollTop = Math.max(0, i * lineHeight - editor.clientHeight / 3);
+        return;
+      }
+      charPos += lines[i].length + 1;
+    }
+  }
+
+  function navigateToHeading(index) {
+    const h = tocHeadings[index];
+    if (!h) return;
+    scrollEditorToHeading(h.level, h.text);
+    switchView('preview');
+    setTimeout(() => scrollToHeading('preview', h.id), 50);
+  }
+
   function syncEditorToPreview() {
     if (currentView !== 'preview' || !renderedHTML) return;
     const previewEl = document.getElementById('preview');
     if (!previewEl || previewEl.scrollHeight <= previewEl.clientHeight) return;
-    const totalLines = editor.value.split('\n').length;
-    if (totalLines <= 1) return;
-    const cursorPos = editor.selectionStart;
-    const cursorLine = editor.value.substring(0, cursorPos).split('\n').length;
-    const ratio = (cursorLine - 1) / (totalLines - 1);
-    const scrollTarget = ratio * (previewEl.scrollHeight - previewEl.clientHeight);
+    const text = editor.value;
+    const lines = text.split('\n');
+    if (lines.length <= 1) return;
+    const cursorLine = text.substring(0, editor.selectionStart).split('\n').length - 1;
+
+    // Find headings in editor source
+    const editorHeadings = [];
+    lines.forEach((line, i) => {
+      const match = line.match(/^(#{1,6})\s+(.+)/);
+      if (match) editorHeadings.push({ line: i, text: match[2].trim() });
+    });
+
+    const previewHeadings = previewEl.querySelectorAll('h1, h2, h3, h4, h5, h6');
+
+    if (editorHeadings.length === 0 || previewHeadings.length === 0) {
+      const ratio = cursorLine / (lines.length - 1);
+      previewEl.scrollTo({ top: ratio * (previewEl.scrollHeight - previewEl.clientHeight), behavior: 'smooth' });
+      return;
+    }
+
+    // Find heading just before cursor
+    let prevIdx = -1;
+    for (let i = editorHeadings.length - 1; i >= 0; i--) {
+      if (editorHeadings[i].line <= cursorLine) { prevIdx = i; break; }
+    }
+
+    if (prevIdx === -1) {
+      // Before first heading
+      const firstLine = editorHeadings[0].line;
+      const ratio = firstLine > 0 ? cursorLine / firstLine : 0;
+      const targetTop = ratio * previewHeadings[0].offsetTop;
+      previewEl.scrollTo({ top: targetTop, behavior: 'smooth' });
+      return;
+    }
+
+    const pIdx = Math.min(prevIdx, previewHeadings.length - 1);
+    let scrollTarget = previewHeadings[pIdx].offsetTop;
+
+    // Interpolate between current and next heading
+    const nextEditor = editorHeadings[prevIdx + 1];
+    const nextPreview = previewHeadings[pIdx + 1];
+    if (nextEditor && nextPreview) {
+      const editorRange = nextEditor.line - editorHeadings[prevIdx].line;
+      const progress = editorRange > 0 ? (cursorLine - editorHeadings[prevIdx].line) / editorRange : 0;
+      scrollTarget += progress * (nextPreview.offsetTop - previewHeadings[pIdx].offsetTop);
+    }
+
     previewEl.scrollTo({ top: scrollTarget, behavior: 'smooth' });
   }
 
