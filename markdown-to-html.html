@@ -157,6 +157,7 @@
       text-overflow: ellipsis;
     }
     .file-chip .file-watch { flex-shrink: 0; }
+    .file-chip .file-readonly { flex-shrink: 0; }
     .file-chip .file-reload,
     .file-chip .file-unlink {
       flex-shrink: 0;
@@ -860,6 +861,8 @@ ${renderedHTML}
   async function openFilePicker() {
     if (window.showOpenFilePicker) {
       try {
+        // Read-only by design: no `mode: 'readwrite'` is requested, so the tool
+        // can only ever read the file — editor edits are never written back.
         const [handle] = await window.showOpenFilePicker({
           types: [{ description: 'Markdown', accept: { 'text/markdown': ['.md', '.markdown', '.mdown', '.mkd'], 'text/plain': ['.txt'] } }],
           excludeAcceptAllOption: false,
@@ -979,7 +982,8 @@ ${renderedHTML}
     }
     const watching = !!watchTimer;
     const name = linkedFileName.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    let html = '';
+    // The opened file is always read-only — editor edits are never written back.
+    let html = '<span class="file-readonly" title="Read-only — edits in the editor are never saved to this file">🔒</span>';
     if (pendingDiskContent !== null) {
       html += '<button class="file-reload" title="File changed on disk — reload" onclick="reloadPending()">⟳ Reload</button>';
     } else if (watching) {

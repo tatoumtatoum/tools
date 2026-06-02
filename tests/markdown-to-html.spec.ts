@@ -443,6 +443,36 @@ test.describe('Markdown to HTML Converter', () => {
       await expect(page.locator('#fileChip')).toContainText('notes.md');
     });
 
+    test('should mark an opened file as read-only', async ({ page }) => {
+      await page.setInputFiles('#fileInput', {
+        name: 'notes.md',
+        mimeType: 'text/markdown',
+        buffer: Buffer.from('# Read Only File'),
+      });
+
+      // A read-only badge should be present on the chip with a clarifying title
+      const badge = page.locator('#fileChip .file-readonly');
+      await expect(badge).toBeVisible();
+      await expect(badge).toHaveAttribute('title', /read-only/i);
+    });
+
+    test('editing an opened file is allowed and never detaches/saves the file', async ({ page }) => {
+      await page.setInputFiles('#fileInput', {
+        name: 'notes.md',
+        mimeType: 'text/markdown',
+        buffer: Buffer.from('# Original'),
+      });
+      await expect(page.locator('#preview h1')).toHaveText('Original');
+
+      // Editing the editor is allowed and updates the preview...
+      await page.locator('#editor').fill('# Edited Locally');
+      await expect(page.locator('#preview h1')).toHaveText('Edited Locally');
+
+      // ...while the file stays linked and read-only (edits are not written back).
+      await expect(page.locator('#fileChip')).toContainText('notes.md');
+      await expect(page.locator('#fileChip .file-readonly')).toBeVisible();
+    });
+
     test('should load a file dropped onto the window', async ({ page }) => {
       // Build a drop DataTransfer carrying a File, then dispatch dragover + drop.
       await page.evaluate(() => {
