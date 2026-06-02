@@ -397,4 +397,103 @@ test.describe('Markdown to HTML Converter', () => {
       await expect(page.locator('#preview strong')).toHaveText('mobile test');
     });
   });
+
+  test.describe('File Open / Drag-Drop / Sync', () => {
+    // Mock the GitHub Markdown API so rendering is deterministic and offline.
+    // Echo a minimal HTML rendering of the posted text's first heading + paragraph.
+    test.beforeEach(async ({ page }) => {
+      await page.route('https://api.github.com/markdown', async route => {
+        const body = JSON.parse(route.request().postData() || '{}');
+        const text: string = body.text || '';
+        const html = text
+          .split('\n')
+          .map(line => {
+            const h = line.match(/^(#{1,6})\s+(.+)/);
+            if (h) {
+              const level = h[1].length;
+              const id = h[2].trim().toLowerCase().replace(/[^\w]+/g, '-').replace(/(^-|-$)/g, '');
+              return `<h${level} id="${id}">${h[2].trim()}</h${level}>`;
+            }
+            return line.trim() ? `<p>${line.trim()}</p>` : '';
+          })
+          .filter(Boolean)
+          .join('\n');
+        await route.fulfill({ status: 200, contentType: 'text/html', body: html });
+      });
+      await page.goto('/markdown-to-html.html');
+      await page.waitForFunction(() => typeof (window as any).renderMarkdown === 'function', { timeout: 10000 });
+    });
+
+    test('should show an Open file button in the toolbar', async ({ page }) => {
+      await expect(page.locator('button[title="Open Markdown file"]')).toBeVisible();
+    });
+
+    test('should load a file via the fallback file input', async ({ page }) => {
+      await page.setInputFiles('#fileInput', {
+        name: 'notes.md',
+        mimeType: 'text/markdown',
+        buffer: Buffer.from('# Loaded Heading\n\nSome loaded body text.'),
+      });
+
+      // Editor populated with the file contents
+      await expect(page.locator('#editor')).toHaveValue(/Loaded Heading/);
+      // Preview reflects the rendered file
+      await expect(page.locator('#preview h1')).toHaveText('Loaded Heading');
+      // File chip shows the filename
+      await expect(page.locator('#fileChip')).toContainText('notes.md');
+    });
+
+    test('should load a file dropped onto the window', async ({ page }) => {
+      // Build a drop DataTransfer carrying a File, then dispatch dragover + drop.
+      await page.evaluate(() => {
+        const dt = new DataTransfer();
+        dt.items.add(new File(['# Dropped Title\n\nDropped paragraph.'], 'dropped.md', { type: 'text/markdown' }));
+        (window as any).__dt = dt;
+        window.dispatchEvent(new DragEvent('dragover', { dataTransfer: dt, bubbles: true, cancelable: true }));
+      });
+
+      // Drop overlay should be visible during dragover
+      await expect(page.locator('#dropOverlay')).toHaveClass(/active/);
+
+      await page.evaluate(() => {
+        window.dispatchEvent(new DragEvent('drop', { dataTransfer: (window as any).__dt, bubbles: true, cancelable: true }));
+      });
+
+      await expect(page.locator('#editor')).toHaveValue(/Dropped Title/);
+      await expect(page.locator('#preview h1')).toHaveText('Dropped Title');
+      // Overlay hidden again after drop
+      await expect(page.locator('#dropOverlay')).not.toHaveClass(/active/);
+    });
+
+    test('should keep Reader Mode in sync with editor changes', async ({ page }) => {
+      const editor = page.locator('#editor');
+      await editor.fill('# First Version');
+      await expect(page.locator('#preview h1')).toHaveText('First Version');
+
+      // Open Reader Mode
+      await page.locator('button[title="Reader mode"]').click();
+      await expect(page.locator('#readerMode')).toHaveClass(/active/);
+      await expect(page.locator('#readerBody h1')).toHaveText('First Version');
+
+      // Change the editor content while Reader Mode is open
+      await editor.fill('# Second Version');
+
+      // Reader body should live-update to the new content
+      await expect(page.locator('#readerBody h1')).toHaveText('Second Version');
+    });
+
+    test('Clear should empty the editor and unlink the file chip', async ({ page }) => {
+      await page.setInputFiles('#fileInput', {
+        name: 'notes.md',
+        mimeType: 'text/markdown',
+        buffer: Buffer.from('# Linked File'),
+      });
+      await expect(page.locator('#fileChip')).toBeVisible();
+
+      await page.locator('button[title="Clear"]').click();
+
+      await expect(page.locator('#editor')).toHaveValue('');
+      await expect(page.locator('#fileChip')).toBeHidden();
+    });
+  });
 });

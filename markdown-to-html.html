@@ -136,6 +136,67 @@
       text-overflow: ellipsis;
     }
 
+    /* Linked-file chip */
+    .file-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      max-width: 45%;
+      background: #eef2ff;
+      color: #3a3a6e;
+      border: 1px solid #d6ddff;
+      border-radius: 12px;
+      padding: 2px 8px;
+      font-size: 12px;
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+    }
+    .file-chip .file-name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .file-chip .file-watch { flex-shrink: 0; }
+    .file-chip .file-reload,
+    .file-chip .file-unlink {
+      flex-shrink: 0;
+      border: none;
+      background: none;
+      cursor: pointer;
+      font-size: 12px;
+      line-height: 1;
+      padding: 2px 4px;
+      border-radius: 6px;
+      color: #3a3a6e;
+    }
+    .file-chip .file-reload { color: #b54708; font-weight: 600; }
+    .file-chip .file-reload:hover { background: #ffe7c2; }
+    .file-chip .file-unlink:hover { background: #d6ddff; }
+
+    /* Drop overlay */
+    .drop-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(26,26,46,0.55);
+      z-index: 150;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .drop-overlay.active { display: flex; }
+    .drop-overlay .drop-msg {
+      border: 3px dashed #fff;
+      border-radius: 16px;
+      color: #fff;
+      font-size: 22px;
+      font-weight: 600;
+      padding: 48px 64px;
+      text-align: center;
+      max-width: 90%;
+      pointer-events: none;
+    }
+
     /* Editor */
     textarea#editor {
       flex: 1;
@@ -396,6 +457,9 @@
 
       #preview { padding: 16px; }
 
+      .drop-overlay .drop-msg { font-size: 17px; padding: 32px 28px; }
+      .file-chip { max-width: 55%; font-size: 11px; }
+
       /* Reader mode mobile */
       .reader-toc { display: none; }
       .reader-toc.show { display: block; position: fixed; inset: 0; z-index: 60; width: 100%; }
@@ -459,6 +523,7 @@
     </select>
   </div>
   <div class="toolbar">
+    <button onclick="openFilePicker()" title="Open Markdown file">📂<span class="btn-label"> Open</span></button>
     <button onclick="renderMarkdown()" id="convertBtn" title="Convert now">🔄<span class="btn-label"> Convert</span></button>
     <button onclick="openSettings()" title="Settings">⚙️</button>
     <button onclick="openReader()" title="Reader mode">📖</button>
@@ -477,9 +542,10 @@
   <div class="panel editor-panel" id="editorPanel">
     <div class="panel-header">
       <span>Markdown Input</span>
+      <span class="file-chip" id="fileChip" style="display:none"></span>
       <span class="status" id="status"></span>
     </div>
-    <textarea id="editor" spellcheck="false" placeholder="Type or paste Markdown here..."></textarea>
+    <textarea id="editor" spellcheck="false" placeholder="Type or paste Markdown here…  (or drop a .md file / use 📂 Open)"></textarea>
   </div>
 
   <div class="panel output-panel" id="outputPanel">
@@ -498,6 +564,14 @@
   </div>
 </div>
 
+<!-- Hidden fallback file input (browsers without the File System Access API) -->
+<input type="file" id="fileInput" accept=".md,.markdown,.mdown,.mkd,.txt,text/markdown,text/plain" style="display:none">
+
+<!-- Drag & drop overlay -->
+<div class="drop-overlay" id="dropOverlay">
+  <div class="drop-msg">📂 Drop your Markdown file to open</div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -507,6 +581,14 @@
   let debounceTimer = null;
   let rateLimit = { remaining: '--', limit: '--', reset: '--' };
   let tocHeadings = [];
+
+  // Linked-file / live-watch state
+  let fileHandle = null;        // FileSystemFileHandle when opened via the File System Access API
+  let watchTimer = null;        // setInterval id polling the file on disk
+  let linkedFileName = '';      // display name of the linked file
+  let lastDiskContent = '';     // content as last read from disk (to detect local edits)
+  let lastDiskModified = 0;     // file.lastModified of the last disk read
+  let pendingDiskContent = null; // disk content awaiting user confirmation (local edits diverged)
 
   // DOM refs
   const editor = document.getElementById('editor');
@@ -546,6 +628,7 @@
       htmlOutput.textContent = '';
       tocEl.innerHTML = '';
       statusEl.textContent = '';
+      refreshReaderIfOpen();
       return;
     }
 
@@ -586,6 +669,7 @@
       preview.innerHTML = html;
       htmlOutput.textContent = html;
       buildTOC(html);
+      refreshReaderIfOpen();
 
       statusEl.textContent = `✅ ${rateLimit.remaining}/${rateLimit.limit} left`;
     } catch (error) {
@@ -667,6 +751,18 @@
     toc.classList.remove('collapsed', 'show');
     document.getElementById('readerMode').classList.add('active');
     document.body.style.overflow = 'hidden';
+  }
+
+  // Keep the Reader Mode overlay in sync with the latest render while it is open.
+  // Preserves scroll position so live updates (typing or disk reloads) aren't jarring.
+  function refreshReaderIfOpen() {
+    const readerMode = document.getElementById('readerMode');
+    if (!readerMode.classList.contains('active')) return;
+    const body = document.getElementById('readerBody');
+    const prevScroll = body.scrollTop;
+    body.innerHTML = renderedHTML;
+    buildReaderTOC();
+    body.scrollTop = prevScroll;
   }
 
   function closeReader() {
@@ -754,7 +850,192 @@ ${renderedHTML}
     htmlOutput.textContent = '';
     tocEl.innerHTML = '';
     statusEl.textContent = '';
+    unlinkFile();
   }
+
+  // ---- File open / drag-drop / live-watch ----
+
+  // Open via the File System Access API when available (enables live-watch),
+  // otherwise fall back to a classic hidden <input type="file"> (load-once).
+  async function openFilePicker() {
+    if (window.showOpenFilePicker) {
+      try {
+        const [handle] = await window.showOpenFilePicker({
+          types: [{ description: 'Markdown', accept: { 'text/markdown': ['.md', '.markdown', '.mdown', '.mkd'], 'text/plain': ['.txt'] } }],
+          excludeAcceptAllOption: false,
+          multiple: false
+        });
+        await loadFromHandle(handle);
+      } catch (err) {
+        if (err && err.name !== 'AbortError') showToast('❌ Could not open file');
+      }
+    } else {
+      document.getElementById('fileInput').click();
+    }
+  }
+
+  // Load from a FileSystemFileHandle and begin watching it for external changes.
+  async function loadFromHandle(handle) {
+    try {
+      const file = await handle.getFile();
+      fileHandle = handle;
+      await loadFromFile(file, handle);
+      startWatching();
+    } catch (err) {
+      showToast('❌ Could not read file');
+    }
+  }
+
+  // Populate the editor from a File object and render. `handle` is null on the
+  // fallback path (no live-watch possible).
+  async function loadFromFile(file, handle) {
+    const text = await file.text();
+    editor.value = text;
+    linkedFileName = file.name;
+    lastDiskContent = text;
+    lastDiskModified = file.lastModified || Date.now();
+    pendingDiskContent = null;
+    updateFileChip();
+    renderMarkdown();
+    if (!handle && window.showOpenFilePicker === undefined) {
+      showToast('📂 Loaded “' + file.name + '” (live-watch needs Chrome/Edge)');
+    } else {
+      showToast('📂 Opened “' + file.name + '”');
+    }
+  }
+
+  // Poll the linked file ~1s and reload when its on-disk content changes.
+  function startWatching() {
+    stopWatching(false);
+    if (!fileHandle) return;
+    watchTimer = setInterval(async () => {
+      if (!fileHandle) return;
+      try {
+        const file = await fileHandle.getFile();
+        if (file.lastModified === lastDiskModified) return;
+        const text = await file.text();
+        onDiskChanged(text, file.lastModified);
+      } catch (err) {
+        // File removed / permission lost — stop watching quietly.
+        stopWatching(true);
+      }
+    }, 1000);
+    updateFileChip();
+  }
+
+  function stopWatching(updateChip) {
+    if (watchTimer) { clearInterval(watchTimer); watchTimer = null; }
+    if (updateChip) updateFileChip();
+  }
+
+  // Fully detach from the linked file.
+  function unlinkFile() {
+    stopWatching(false);
+    fileHandle = null;
+    linkedFileName = '';
+    lastDiskContent = '';
+    lastDiskModified = 0;
+    pendingDiskContent = null;
+    updateFileChip();
+  }
+
+  // Called when the watched file changed on disk.
+  function onDiskChanged(text, modified) {
+    lastDiskModified = modified;
+    if (editor.value === lastDiskContent) {
+      // No un-saved in-tool edits — safe to reload silently (the sync behavior).
+      editor.value = text;
+      lastDiskContent = text;
+      pendingDiskContent = null;
+      updateFileChip();
+      renderMarkdown();
+      statusEl.textContent = '🔄 Reloaded from disk';
+    } else {
+      // Local edits diverged — don't clobber; offer a manual reload instead.
+      pendingDiskContent = text;
+      updateFileChip();
+      showToast('⚠️ “' + linkedFileName + '” changed on disk — click ⟳ to reload');
+    }
+  }
+
+  // Apply a pending disk change after the user confirms (overwrites local edits).
+  function reloadPending() {
+    if (pendingDiskContent === null) return;
+    editor.value = pendingDiskContent;
+    lastDiskContent = pendingDiskContent;
+    pendingDiskContent = null;
+    updateFileChip();
+    renderMarkdown();
+    statusEl.textContent = '🔄 Reloaded from disk';
+  }
+
+  // Render the linked-file chip (filename, watch/reload indicators, unlink).
+  function updateFileChip() {
+    const chip = document.getElementById('fileChip');
+    if (!linkedFileName) {
+      chip.style.display = 'none';
+      chip.innerHTML = '';
+      return;
+    }
+    const watching = !!watchTimer;
+    const name = linkedFileName.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    let html = '';
+    if (pendingDiskContent !== null) {
+      html += '<button class="file-reload" title="File changed on disk — reload" onclick="reloadPending()">⟳ Reload</button>';
+    } else if (watching) {
+      html += '<span class="file-watch" title="Watching file for changes">👁</span>';
+    }
+    html += '<span class="file-name" title="' + name + '">' + name + '</span>';
+    html += '<button class="file-unlink" title="Stop using this file" onclick="unlinkFile()">✕</button>';
+    chip.innerHTML = html;
+    chip.style.display = 'inline-flex';
+  }
+
+  // Fallback file input
+  document.getElementById('fileInput').addEventListener('change', (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (file) loadFromFile(file, null);
+    e.target.value = ''; // allow re-selecting the same file
+  });
+
+  // Drag & drop anywhere on the window
+  const dropOverlay = document.getElementById('dropOverlay');
+  let dragDepth = 0;
+  function hasFiles(e) {
+    return e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files');
+  }
+  window.addEventListener('dragenter', (e) => {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    dragDepth++;
+    dropOverlay.classList.add('active');
+  });
+  window.addEventListener('dragover', (e) => {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    dropOverlay.classList.add('active');
+  });
+  window.addEventListener('dragleave', (e) => {
+    if (!hasFiles(e)) return;
+    dragDepth--;
+    if (dragDepth <= 0) { dragDepth = 0; dropOverlay.classList.remove('active'); }
+  });
+  window.addEventListener('drop', async (e) => {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    dragDepth = 0;
+    dropOverlay.classList.remove('active');
+    // Prefer a real handle (enables live-watch) when the browser supports it.
+    const item = e.dataTransfer.items && e.dataTransfer.items[0];
+    if (item && item.getAsFileSystemHandle) {
+      try {
+        const handle = await item.getAsFileSystemHandle();
+        if (handle && handle.kind === 'file') { await loadFromHandle(handle); return; }
+      } catch (err) { /* fall through to plain file read */ }
+    }
+    const file = e.dataTransfer.files && e.dataTransfer.files[0];
+    if (file) loadFromFile(file, null);
+  });
 
   // Utility
   function showToast(msg) {
