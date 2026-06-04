@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls -la /c/Users/LVVW5962/Documents/perso/dev/copilot/tools/ | grep -E \"\\\\.\\(html|js|css|ts|tsx\\)$\")",
+      "Bash(npx playwright:*)"
+    ]
+  }
+}
