@@ -1,6 +1,6 @@
-const CACHE_NAME = 'mermaid-png-v1';
+const CACHE_NAME = 'mermaid-image-v2';
 const ASSETS = [
-  'mermaid-to-png.html',
+  'mermaid-to-image.html',
   'manifest.json',
   'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js'
 ];
@@ -25,6 +25,6 @@ self.addEventListener('fetch', event => {
   event.respondWith(
     caches.match(event.request)
       .then(cached => cached || fetch(event.request))
-      .catch(() => caches.match('mermaid-to-png.html'))
+      .catch(() => caches.match('mermaid-to-image.html'))
   );
 });

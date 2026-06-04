@@ -11,7 +11,7 @@ test.describe('Mobile Download Debug Tests', () => {
     // Set mobile viewport
     await page.setViewportSize({ width: 375, height: 667 });
     
-    await page.goto('/mermaid-to-png.html');
+    await page.goto('/mermaid-to-image.html');
     
     // Check what isMobile returns
     const isMobileResult = await page.evaluate(() => {
@@ -31,7 +31,7 @@ test.describe('Mobile Download Debug Tests', () => {
     // Emulate mobile
     await page.setViewportSize({ width: 375, height: 667 });
     
-    await page.goto('/mermaid-to-png.html');
+    await page.goto('/mermaid-to-image.html');
     await page.waitForSelector('#preview-inner svg', { timeout: 10000 });
     
     // Force mobile detection by overriding the function
@@ -64,7 +64,7 @@ test.describe('Mobile Download Debug Tests', () => {
   });
 
   test('should verify PNG generation works', async ({ page }) => {
-    await page.goto('/mermaid-to-png.html');
+    await page.goto('/mermaid-to-image.html');
     await page.waitForSelector('#preview-inner svg', { timeout: 10000 });
     
     // Generate PNG via exposed function
@@ -118,7 +118,7 @@ test.describe('Mobile Download Debug Tests', () => {
   test('modal should have working download options', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 667 });
     
-    await page.goto('/mermaid-to-png.html');
+    await page.goto('/mermaid-to-image.html');
     await page.waitForSelector('#preview-inner svg', { timeout: 10000 });
     
     // Manually trigger the modal with a test image
@@ -164,7 +164,7 @@ test.describe('Mobile Chrome Emulation', () => {
   });
 
   test('should show modal on mobile Chrome Android', async ({ page }) => {
-    await page.goto('/mermaid-to-png.html');
+    await page.goto('/mermaid-to-image.html');
     await page.waitForSelector('#preview-inner svg', { timeout: 10000 });
     
     // Verify mobile detection
@@ -195,7 +195,7 @@ test.describe('Mobile Firefox Emulation', () => {
   });
 
   test('should show modal on mobile Firefox Android', async ({ page }) => {
-    await page.goto('/mermaid-to-png.html');
+    await page.goto('/mermaid-to-image.html');
     await page.waitForSelector('#preview-inner svg', { timeout: 10000 });
     
     // Verify mobile detection

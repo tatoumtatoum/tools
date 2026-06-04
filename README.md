@@ -6,15 +6,15 @@ A collection of useful web-based tools for developers, designers, and researcher
 
 ## 📚 Available Tools
 
-### 1. Mermaid to PNG Converter
+### 1. Mermaid to Image Converter
 
-Convert Mermaid diagrams to high-quality PNG images with an intuitive interface.
+Convert Mermaid diagrams to high-quality PNG or SVG images with an intuitive interface.
 
 **Features:**
 - 🎨 Real-time diagram preview
-- 📥 Drag-and-drop support for `.mmd` files
+- 📂 Open a `.mmd`/`.mermaid` file via button **or** drag-and-drop
+- 🖼️ Export as PNG (raster, customizable scale) or SVG (vector)
 - 🔍 Zoom controls for precise viewing
-- 💾 Export to PNG with customizable quality
 - 📱 Fully responsive design
 - 🌐 Works offline (Progressive Web App)
 
@@ -23,7 +23,7 @@ Convert Mermaid diagrams to high-quality PNG images with an intuitive interface.
 - Generating flowcharts for presentations
 - Converting Mermaid code to shareable images
 
-**[→ Open Mermaid to PNG Converter](mermaid-to-png.html)**
+**[→ Open Mermaid to Image Converter](mermaid-to-image.html)**
 
 ---
 
@@ -180,7 +180,7 @@ npm test
 ```
 tools/
 ├── index.html                          # Main landing page
-├── mermaid-to-png.html                # Mermaid diagram converter
+├── mermaid-to-image.html              # Mermaid diagram converter (PNG/SVG)
 ├── ingredient-scanner.html            # Ingredient safety scanner
 ├── cat-detector.html                  # Cat detection tool
 ├── markdown-to-html.html              # Markdown to HTML converter
@@ -188,7 +188,7 @@ tools/
 ├── ingredient-scanner-manifest.json   # PWA manifest for scanner
 ├── sw.js                             # Service worker
 ├── tests/                            # Playwright tests
-│   ├── mermaid-to-png.spec.ts
+│   ├── mermaid-to-image.spec.ts
 │   ├── ingredient-scanner.spec.ts
 │   ├── markdown-to-html.spec.ts
 │   └── mobile-download-debug.spec.ts
