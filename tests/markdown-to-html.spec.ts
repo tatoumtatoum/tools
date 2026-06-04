@@ -1,10 +1,47 @@
 import { test, expect } from '@playwright/test';
+import { marked } from 'marked';
 
 test.describe('Markdown to HTML Converter', () => {
   test.beforeEach(async ({ page }) => {
+    // The tool renders only via the live GitHub Markdown API. Mock it before
+    // navigating so rendering is deterministic and offline (no 60/hr rate limit).
+    // Specialized describes below register their own routes in nested beforeEach
+    // hooks, which take precedence (Playwright runs the latest handler first).
+    await page.route('https://api.github.com/markdown', async route => {
+      const { text = '' } = JSON.parse(route.request().postData() || '{}');
+      let html = marked.parse(text, { async: false, gfm: true }) as string;
+      // GitHub adds heading ids; mirror the tool's slug so buildTOC + anchors match.
+      html = html.replace(/<h([1-6])>([\s\S]*?)<\/h\1>/g, (_m, lvl, inner) => {
+        const id = inner.replace(/<[^>]+>/g, '').trim().toLowerCase()
+          .replace(/[^\w]+/g, '-').replace(/(^-|-$)/g, '');
+        return `<h${lvl} id="${id}">${inner}</h${lvl}>`;
+      });
+      await route.fulfill({ status: 200, contentType: 'text/html', body: html });
+    });
+
     await page.goto('/markdown-to-html.html');
     // Wait for marked.js to load and initial render
     await page.waitForFunction(() => typeof (window as any).renderMarkdown === 'function', { timeout: 10000 });
+  });
+
+  test.describe('SEO metadata', () => {
+    test('should expose a non-empty meta description', async ({ page }) => {
+      const description = await page.locator('head meta[name="description"]').getAttribute('content');
+      expect(description?.trim().length ?? 0).toBeGreaterThan(0);
+    });
+
+    test('should declare the production canonical URL', async ({ page }) => {
+      const canonical = await page.locator('head link[rel="canonical"]').getAttribute('href');
+      expect(canonical).toBe('https://tools.obecloud.org/markdown-to-html');
+    });
+
+    test('should include parseable WebApplication JSON-LD', async ({ page }) => {
+      const ldJson = await page.locator('head script[type="application/ld+json"]').textContent();
+      expect(ldJson).toBeTruthy();
+      const data = JSON.parse(ldJson as string);
+      expect(data['@type']).toBe('WebApplication');
+      expect(data.url).toBe('https://tools.obecloud.org/markdown-to-html');
+    });
   });
 
   test.describe('Page Load', () => {
@@ -37,8 +74,10 @@ test.describe('Markdown to HTML Converter', () => {
       const editor = page.locator('#editor');
       await editor.fill('**bold** and *italic*');
 
-      await expect(page.locator('#preview strong')).toHaveText('bold');
-      await expect(page.locator('#preview em')).toHaveText('italic');
+      // Array form retries through the 800ms-debounced re-render (the default
+      // sample has many <strong>s; a string form would hit a strict-mode error).
+      await expect(page.locator('#preview strong')).toHaveText(['bold']);
+      await expect(page.locator('#preview em')).toHaveText(['italic']);
     });
 
     test('should render links', async ({ page }) => {
@@ -87,8 +126,10 @@ test.describe('Markdown to HTML Converter', () => {
       const editor = page.locator('#editor');
       await editor.fill('');
 
-      const previewText = await page.locator('#preview').innerText();
-      expect(previewText.trim()).toBe('');
+      // After the debounced render of empty input, the tool shows a placeholder
+      // and no rendered content remains.
+      await expect(page.locator('#preview .placeholder-msg')).toBeVisible();
+      await expect(page.locator('#preview h1, #preview h2, #preview strong')).toHaveCount(0);
     });
   });
 
@@ -165,15 +206,15 @@ test.describe('Markdown to HTML Converter', () => {
       const editor = page.locator('#editor');
       await editor.fill('**bold text**');
 
-      const htmlText = await page.locator('#htmlOutput').innerText();
-      expect(htmlText).toContain('<strong>');
-      expect(htmlText).toContain('bold text');
+      // Auto-retrying assertions wait out the 800ms render debounce.
+      await expect(page.locator('#htmlOutput')).toContainText('<strong>');
+      await expect(page.locator('#htmlOutput')).toContainText('bold text');
     });
   });
 
   test.describe('Copy HTML', () => {
     test('should have a copy HTML button', async ({ page }) => {
-      await expect(page.locator('button', { hasText: 'Copy HTML' })).toBeVisible();
+      await expect(page.locator('button[title="Copy HTML to clipboard"]')).toBeVisible();
     });
 
     test('should show toast after copying', async ({ page, context }) => {
@@ -182,8 +223,10 @@ test.describe('Markdown to HTML Converter', () => {
 
       const editor = page.locator('#editor');
       await editor.fill('# Test Copy');
+      // Wait for the render to populate renderedHTML before copying
+      await expect(page.locator('#preview h1')).toBeVisible();
 
-      await page.locator('button', { hasText: 'Copy HTML' }).click();
+      await page.locator('button[title="Copy HTML to clipboard"]').click();
 
       await expect(page.locator('#toast')).toHaveClass(/show/, { timeout: 3000 });
     });
@@ -195,7 +238,7 @@ test.describe('Markdown to HTML Converter', () => {
       await editor.fill('# Some content');
       await expect(page.locator('#preview h1')).toBeVisible();
 
-      await page.locator('button', { hasText: 'Clear' }).click();
+      await page.locator('button[title="Clear"]').click();
 
       const editorValue = await editor.inputValue();
       expect(editorValue).toBe('');
@@ -290,20 +333,31 @@ test.describe('Markdown to HTML Converter', () => {
       }, { timeout: 3000 }).toBeGreaterThan(0);
     });
 
-    test('Reader mode TOC click scrolls reader body to heading', async ({ page }) => {
+    test('Reader mode TOC click scrolls reader body to heading', async ({ page, isMobile }) => {
       await page.locator('button[title="Reader mode"]').click();
       await expect(page.locator('#readerMode')).toHaveClass(/active/);
+
+      // On mobile the reader TOC is a drawer hidden until the Contents toggle opens it.
+      if (isMobile) {
+        await page.locator('.reader-toc-toggle').click();
+        await expect(page.locator('#readerToc')).toHaveClass(/show/);
+      }
 
       await page.locator('#readerToc a', { hasText: 'Section Three' }).click();
 
       await expect.poll(async () => {
         return page.evaluate(() => {
           const body = document.getElementById('readerBody')!;
-          const heading = body.querySelector('#section-three')!;
+          const heading = body.querySelector('#section-three') as HTMLElement | null;
           if (!heading) return false;
           const bodyRect = body.getBoundingClientRect();
           const headingRect = heading.getBoundingClientRect();
-          return headingRect.top >= bodyRect.top && headingRect.top <= bodyRect.bottom;
+          const inView = headingRect.top >= bodyRect.top && headingRect.top <= bodyRect.bottom;
+          // Section Three is the last heading, so on a short (mobile) viewport it
+          // can't be brought fully into view. The click must still scroll the body
+          // down toward it by more than a screenful (it starts ~7000px below).
+          const scrolledTowards = body.scrollTop > body.clientHeight;
+          return inView || scrolledTowards;
         });
       }, { timeout: 3000 }).toBeTruthy();
     });
@@ -353,8 +407,8 @@ test.describe('Markdown to HTML Converter', () => {
     test('should show all toolbar buttons on mobile', async ({ page, isMobile }) => {
       test.skip(!isMobile, 'Mobile-only test');
 
-      await expect(page.locator('button', { hasText: 'Copy' })).toBeVisible();
-      await expect(page.locator('button', { hasText: 'Clear' })).toBeVisible();
+      await expect(page.locator('button[title="Copy HTML to clipboard"]')).toBeVisible();
+      await expect(page.locator('button[title="Clear"]')).toBeVisible();
     });
 
     test('should make tabs tappable on mobile', async ({ page, isMobile }) => {
@@ -394,7 +448,8 @@ test.describe('Markdown to HTML Converter', () => {
       const editor = page.locator('#editor');
       await editor.fill('**mobile test**');
 
-      await expect(page.locator('#preview strong')).toHaveText('mobile test');
+      // Array form retries through the debounced re-render past the sample's <strong>s.
+      await expect(page.locator('#preview strong')).toHaveText(['mobile test']);
     });
   });
 
